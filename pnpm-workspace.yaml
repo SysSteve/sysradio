@@ -1,0 +1,2 @@
+# Packages may only run install scripts when listed here.
+onlyBuiltDependencies: []

@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- SysRadio app icon: rounded square in the brand colour, a station dot with two waves. -->
+  <rect x="32" y="32" width="960" height="960" rx="216" fill="#4a36cc"/>
+  <g fill="none" stroke="#ffffff" stroke-width="64" stroke-linecap="round">
+    <path d="M384 384a180 180 0 0 0 0 256"/>
+    <path d="M640 384a180 180 0 0 1 0 256"/>
+    <path d="M286 286a320 320 0 0 0 0 452"/>
+    <path d="M738 286a320 320 0 0 1 0 452"/>
+  </g>
+  <circle cx="512" cy="512" r="72" fill="#ffffff"/>
+</svg>
