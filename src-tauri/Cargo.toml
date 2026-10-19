@@ -3,7 +3,7 @@ members = [".", "crates/streamproxy"]
 
 [workspace.package]
 edition = "2021"
-version = "0.1.0"
+version = "0.1.1"
 publish = false
 
 [workspace.dependencies]
@@ -39,6 +39,17 @@ serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 log.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+# Same version Tauri uses, so it is compiled once.
+windows = { version = "0.62.2", features = [
+  "Win32_Foundation",
+  "Win32_Media_Audio",
+  "Win32_System_Com",
+  "Win32_System_Com_StructuredStorage",
+  "Win32_System_Diagnostics_ToolHelp",
+  "Win32_System_Variant",
+] }
 
 [profile.release]
 codegen-units = 1

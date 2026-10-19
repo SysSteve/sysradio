@@ -1,6 +1,8 @@
 //! SysRadio desktop shell: window, tray, autostart and the commands the web frontend calls.
 //! Playback itself happens in the web view (`<audio>`), fed by the local stream proxy.
 
+mod mixer;
+
 use serde::Deserialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -57,6 +59,12 @@ async fn stations_by_id(
 fn count_click(state: State<'_, Arc<AppState>>, id: String) {
     let state = state.inner().clone();
     tauri::async_runtime::spawn(async move { state.directory.click(&id).await });
+}
+
+/// Playback started: give our WebView2 audio session the app's name and icon (Windows mixer).
+#[tauri::command]
+fn audio_started() {
+    mixer::brand_audio_sessions();
 }
 
 #[tauri::command]
@@ -250,6 +258,7 @@ pub fn run() {
             search_stations,
             stations_by_id,
             count_click,
+            audio_started,
             set_close_to_tray,
             update_tray
         ])

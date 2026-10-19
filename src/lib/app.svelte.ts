@@ -32,6 +32,7 @@ export class AppState {
       this.settings.lastStationId = station.id;
       platform.countClick(station.id);
     };
+    this.player.onPlaying = () => platform.audioStarted();
   }
 
   get locale() {

@@ -34,6 +34,8 @@ export class Player {
   #timer: ReturnType<typeof setTimeout> | undefined;
   /** Called whenever a station starts (for history and click counting). */
   onStart: (station: Station) => void = () => {};
+  /** Called whenever audio actually starts coming out (also after a reconnect). */
+  onPlaying: () => void = () => {};
 
   constructor(streamUrl: (url: string, session: string) => string, audio: AudioLike) {
     this.#streamUrl = streamUrl;
@@ -42,6 +44,7 @@ export class Player {
       if (this.status === 'idle') return;
       this.status = 'playing';
       this.#attempt = 0;
+      this.onPlaying();
     });
     // A live stream that ends or fails has dropped: reconnect.
     audio.addEventListener('error', () => this.#dropped());

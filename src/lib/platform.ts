@@ -15,6 +15,8 @@ export interface Platform {
   search(query: SearchQuery): Promise<Station[]>;
   byIds(ids: string[]): Promise<Station[]>;
   countClick(id: string): void;
+  /** Audio is coming out (Windows: name the mixer entry after the app). */
+  audioStarted(): void;
   load<T>(key: string): Promise<T | undefined>;
   save(key: string, value: unknown): Promise<void>;
   onNowPlaying(handler: (event: NowPlayingEvent) => void): Promise<() => void>;
@@ -62,6 +64,7 @@ export async function tauriPlatform(): Promise<Platform> {
     search: (search) => invoke<Station[]>('search_stations', { search }),
     byIds: (ids) => invoke<Station[]>('stations_by_id', { ids }),
     countClick: (id) => void invoke('count_click', { id }).catch(() => {}),
+    audioStarted: () => void invoke('audio_started').catch(() => {}),
     load: (key) => store.get(key),
     save: (key, value) => store.set(key, value),
     onNowPlaying: (handler) => listen<NowPlayingEvent>('now-playing', (e) => handler(e.payload)),
@@ -145,6 +148,7 @@ export function browserPlatform(): Platform {
     },
     byIds: async (ids) => sampleStations.filter((s) => ids.includes(s.id)),
     countClick: () => {},
+    audioStarted: () => {},
     load: async (key) => read(key),
     async save(key, value) {
       try {

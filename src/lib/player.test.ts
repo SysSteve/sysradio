@@ -35,13 +35,16 @@ describe('Player', () => {
 
   it('connects, then reports playing', () => {
     const started = vi.fn();
+    const playing = vi.fn();
     player.onStart = started;
+    player.onPlaying = playing;
     player.play(station);
     expect(player.status).toBe('connecting');
     expect(audio.src).toBe(`proxy?u=${station.url}&s=${player.session}`);
     audio.fire('playing');
     expect(player.status).toBe('playing');
     expect(started).toHaveBeenCalledWith(station);
+    expect(playing).toHaveBeenCalledOnce();
   });
 
   it('stop disconnects and toggle resumes live', () => {

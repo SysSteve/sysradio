@@ -3596,7 +3596,7 @@ checksum = "ff7589a1859b09232522bb9edf076ca7fcf14ded96685d3fa629db73023ffbb7"
 
 [[package]]
 name = "streamproxy"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "bytes",
  "encoding_rs",
@@ -3715,7 +3715,7 @@ dependencies = [
 
 [[package]]
 name = "sysradio"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "log",
  "serde",
@@ -3728,6 +3728,7 @@ dependencies = [
  "tauri-plugin-store",
  "tauri-plugin-window-state",
  "tokio",
+ "windows",
 ]
 
 [[package]]
