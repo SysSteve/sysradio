@@ -30,20 +30,22 @@ name = "sysradio_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
-tauri-build = { version = "2.7.2", features = [] }
+tauri-build = { version = "=2.7.2", features = [] }
 
+# Tauri crates are pinned exactly: npm packages and crates must match (major.minor),
+# and new releases are only taken after a few days (see src/lib/versions.test.ts).
 [dependencies]
 streamproxy = { path = "crates/streamproxy" }
-tauri = { version = "2.12.3", features = ["tray-icon", "image-png"] }
-tauri-plugin-autostart = "2.7.0"
-tauri-plugin-global-shortcut = "2.4.1"
-tauri-plugin-log = "2.10.1"
-tauri-plugin-opener = "2.7.1"
-tauri-plugin-process = "2.4.0"
-tauri-plugin-single-instance = "2.5.3"
-tauri-plugin-store = "2.5.0"
-tauri-plugin-updater = "2.13.3"
-tauri-plugin-window-state = "2.5.0"
+tauri = { version = "=2.12.3", features = ["tray-icon", "image-png"] }
+tauri-plugin-autostart = "=2.7.0"
+tauri-plugin-global-shortcut = "=2.4.1"
+tauri-plugin-log = "=2.10.1"
+tauri-plugin-opener = "=2.7.1"
+tauri-plugin-process = "=2.4.0"
+tauri-plugin-single-instance = "=2.5.3"
+tauri-plugin-store = "=2.5.0"
+tauri-plugin-updater = "=2.13.3"
+tauri-plugin-window-state = "=2.5.0"
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
