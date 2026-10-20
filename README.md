@@ -87,18 +87,36 @@ shapes the sound to your taste. No account, no ads, no tracking.
 - **Languages:** English, German, Spanish and French.
 - **Private:** SysRadio collects no data. Favorites and settings stay on your device.
 
+## System requirements
+
+|                 | Windows                                                                                                       | macOS                                  |
+| --------------- | ------------------------------------------------------------------------------------------------------------- | -------------------------------------- |
+| **Version**     | Windows 10 or 11, 64-bit                                                                                      | macOS 11 Big Sur or later              |
+| **Processor**   | x64 (on Windows 11 on Arm via the built-in x64 emulation)                                                     | Apple silicon or Intel (universal app) |
+| **Web runtime** | Microsoft Edge WebView2: built into Windows 11 and current Windows 10; the installer adds it if it is missing | built in (WebKit)                      |
+| **Disk space**  | under 10 MB                                                                                                   | about 15 MB                            |
+| **Rights**      | no administrator rights needed (installs for your user)                                                       | drag into Applications                 |
+
+You also need an **internet connection** and a sound output. A station uses about as much data
+as its bitrate: 128 kbit/s is roughly 60 MB per hour, high-quality 320 kbit/s streams about
+145 MB per hour.
+
+**Linux** has no installer yet; SysRadio builds and runs from source (see below), but is not
+tested there regularly.
+
 ## Install
 
 Download the latest installer from
-[Releases](https://github.com/SysSteve/sysradio/releases):
+[Releases](https://github.com/SysSteve/sysradio/releases/latest):
 
-- **Windows 10/11:** `SysRadio_x.y.z_x64-setup.exe`. Installs for your user only, no admin
-  rights needed. Running a newer installer updates SysRadio in place.
-- **macOS 11 or later:** `SysRadio_x.y.z_universal.dmg` (Apple silicon and Intel).
+- **Windows:** `SysRadio_x.y.z_x64-setup.exe`. Running a newer installer updates SysRadio in
+  place; favorites and settings stay.
+- **macOS:** `SysRadio_x.y.z_universal.dmg`, then drag SysRadio into Applications.
 
 The installers are not code-signed yet. Windows may show "Windows protected your PC": choose
-**More info → Run anyway**. On macOS, open the app with right-click → **Open** the first time.
-Code signing is planned.
+**More info → Run anyway**. With Smart App Control turned on, Windows 11 blocks unsigned apps
+completely until code signing is in place. On macOS, open the app with right-click → **Open**
+the first time. Code signing is planned.
 
 ## Build from source
 

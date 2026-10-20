@@ -12,10 +12,12 @@ export function notesFor(changelog, version) {
 
 export const INSTALL = `### Install
 
-- **Windows 10/11:** \`SysRadio_<version>_x64-setup.exe\`. Installs for your user, no admin rights needed. A newer installer updates SysRadio in place.
-- **macOS 11+:** \`SysRadio_<version>_universal.dmg\` (Apple silicon and Intel).
+- **Windows 10/11 (64-bit):** \`SysRadio_<version>_x64-setup.exe\`. Installs for your user, no admin rights needed. A newer installer updates SysRadio in place; favorites and settings stay.
+- **macOS 11 Big Sur or later:** \`SysRadio_<version>_universal.dmg\` (Apple silicon and Intel).
 
-The installers are not code-signed yet. Windows may show "Windows protected your PC": choose **More info → Run anyway**. On macOS, open the app with right-click → **Open** the first time.`;
+Requirements: internet connection; on Windows the Microsoft Edge WebView2 runtime (built into Windows 11 and current Windows 10, otherwise the installer adds it). Details: [system requirements](https://github.com/SysSteve/sysradio#system-requirements).
+
+The installers are not code-signed yet. Windows may show "Windows protected your PC": choose **More info → Run anyway**; with Smart App Control on, Windows 11 blocks unsigned apps until code signing is in place. On macOS, open the app with right-click → **Open** the first time.`;
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const version = (process.argv[2] ?? '').replace(/^v/, '');
