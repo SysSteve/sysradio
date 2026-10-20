@@ -85,7 +85,8 @@ shapes the sound to your taste. No account, no ads, no tracking.
 - **Tray and autostart:** start at sign-in, close to the tray.
 - **Accessible:** built and tested for WCAG 2.2 AA (screen readers, keyboard, contrast).
 - **Languages:** English, German, Spanish and French.
-- **Private:** SysRadio collects no data. Favorites and settings stay on your device.
+- **Private:** SysRadio collects no data. Favorites and settings stay on your device; see
+  [PRIVACY.md](PRIVACY.md) for the services it connects to.
 
 ## System requirements
 
