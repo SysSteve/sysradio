@@ -74,6 +74,18 @@
         "displayLanguageSelector": false
       }
     },
-    "macOS": { "minimumSystemVersion": "11.0" }
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    },
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERGMTVBMjkwQThGNUI4MzkKUldRNXVQV29rS0lWM3k3VmZvdzRqdDZXZVdxWVNtenN4ckdHaWxMNWJzZWhxTkx0ZlhBZXR5R3oK",
+      "endpoints": ["https://github.com/SysSteve/sysradio/releases/latest/download/latest.json"],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

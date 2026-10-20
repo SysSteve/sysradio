@@ -218,3 +218,24 @@ test('floating player mirrors and controls the main window', async ({ page, cont
     );
   }
 });
+
+test('updates: manual check, notice, progress, later', async ({ page }) => {
+  await open(page);
+  await page.getByRole('tab', { name: 'Einstellungen' }).click();
+  await page.getByRole('button', { name: 'Nach Updates suchen' }).click();
+  await expect(page.getByText('SysRadio ist auf dem neuesten Stand.')).toBeVisible();
+
+  await page.evaluate(() => localStorage.setItem('sysradio:fake-update', '9.9.9'));
+  await page.getByRole('button', { name: 'Nach Updates suchen' }).click();
+  const notice = page.getByRole('region', { name: 'Update' });
+  await expect(notice.getByText('Version 9.9.9 ist verfügbar.')).toBeVisible();
+  await notice.getByRole('button', { name: 'Später' }).click();
+  await expect(notice).toBeHidden();
+
+  await page.getByRole('button', { name: 'Nach Updates suchen' }).click();
+  await notice.getByRole('button', { name: 'Jetzt aktualisieren' }).click();
+  await expect(notice.getByText(/Update wird geladen/)).toBeVisible();
+  await expect(
+    notice.getByText('Update wird installiert, SysRadio startet gleich neu …'),
+  ).toBeVisible();
+});

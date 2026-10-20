@@ -177,13 +177,29 @@ export const de = {
   'settings.directory':
     'Senderdaten vom freien Community-Verzeichnis radio-browser.info. Die Streams kommen direkt von den Sendern.',
   'settings.privacy':
-    'SysRadio sammelt keine Daten. Favoriten und Einstellungen bleiben auf diesem Gerät.',
+    'SysRadio sammelt keine Daten. Favoriten und Einstellungen bleiben auf diesem Gerät. Für Updates fragt SysRadio bei GitHub nach der neuesten Version.',
 
   'settings.openSource': 'SysRadio ist freie Software unter der MIT-Lizenz.',
   'settings.sourceCode': 'Quellcode auf GitHub',
   'settings.licenses': 'Lizenzen von Drittanbietern',
   'settings.close': 'Schließen',
   'settings.loading': 'Lade …',
+
+  'settings.autoUpdate': 'Automatisch nach Updates suchen',
+
+  'update.label': 'Update',
+  'update.available': (version: string) => `Version ${version} ist verfügbar.`,
+  'update.install': 'Jetzt aktualisieren',
+  'update.later': 'Später',
+  'update.notes': 'Was ist neu?',
+  'update.downloading': (percent: number) => `Update wird geladen … ${percent}\u00a0%`,
+  'update.downloadingUnknown': 'Update wird geladen …',
+  'update.installing': 'Update wird installiert, SysRadio startet gleich neu …',
+  'update.failed': 'Das Update hat nicht geklappt. Versuche es später noch einmal.',
+  'update.check': 'Nach Updates suchen',
+  'update.checking': 'Suche nach Updates …',
+  'update.upToDate': 'SysRadio ist auf dem neuesten Stand.',
+  'update.checkFailed': 'Die Suche nach Updates hat nicht geklappt.',
 
   'shortcuts.title': 'Tastenkürzel',
   'shortcuts.action': 'Aktion',

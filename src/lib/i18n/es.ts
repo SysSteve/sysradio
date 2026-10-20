@@ -178,13 +178,29 @@ export const es: Messages = {
   'settings.directory':
     'Datos de emisoras del directorio comunitario y gratuito radio-browser.info. Los streams llegan directamente de las emisoras.',
   'settings.privacy':
-    'SysRadio no recopila datos. Tus favoritos y ajustes se quedan en este dispositivo.',
+    'SysRadio no recopila datos. Tus favoritos y ajustes se quedan en este dispositivo. Para las actualizaciones, SysRadio consulta en GitHub cuál es la versión más reciente.',
 
   'settings.openSource': 'SysRadio es software libre con licencia MIT.',
   'settings.sourceCode': 'Código fuente en GitHub',
   'settings.licenses': 'Licencias de terceros',
   'settings.close': 'Cerrar',
   'settings.loading': 'Cargando…',
+
+  'settings.autoUpdate': 'Buscar actualizaciones automáticamente',
+
+  'update.label': 'Actualización',
+  'update.available': (version) => `La versión ${version} está disponible.`,
+  'update.install': 'Actualizar ahora',
+  'update.later': 'Más tarde',
+  'update.notes': '¿Qué hay de nuevo?',
+  'update.downloading': (percent) => `Descargando la actualización… ${percent}\u00a0%`,
+  'update.downloadingUnknown': 'Descargando la actualización…',
+  'update.installing': 'Instalando la actualización, SysRadio se reiniciará enseguida…',
+  'update.failed': 'La actualización no funcionó. Vuelve a intentarlo más tarde.',
+  'update.check': 'Buscar actualizaciones',
+  'update.checking': 'Buscando actualizaciones…',
+  'update.upToDate': 'SysRadio está actualizado.',
+  'update.checkFailed': 'No se pudieron buscar actualizaciones.',
 
   'shortcuts.title': 'Atajos de teclado',
   'shortcuts.action': 'Acción',

@@ -10,6 +10,7 @@ import type {
   Station,
   TrayAction,
   TrayState,
+  UpdateInfo,
 } from './types';
 
 /** A system-wide shortcut to register. */
@@ -61,6 +62,10 @@ export interface Platform {
   getAutostart(): Promise<boolean>;
   setAutostart(enabled: boolean): Promise<void>;
   version(): Promise<string>;
+  /** Asks for a newer signed release; null when up to date. */
+  checkUpdate(): Promise<UpdateInfo | null>;
+  /** Downloads and installs the update found last, then restarts SysRadio. */
+  installUpdate(onProgress: (fraction: number | null) => void): Promise<void>;
   /** Opens a web page in the default browser (only allowed addresses). */
   openUrl(url: string): Promise<void>;
   /** Main window → floating player. */
@@ -110,6 +115,9 @@ export async function tauriPlatform(): Promise<Platform> {
   const autostart = await import('@tauri-apps/plugin-autostart');
   const shortcuts = await import('@tauri-apps/plugin-global-shortcut');
   const opener = await import('@tauri-apps/plugin-opener');
+  const updater = await import('@tauri-apps/plugin-updater');
+  const processPlugin = await import('@tauri-apps/plugin-process');
+  let pendingUpdate: Awaited<ReturnType<typeof updater.check>> = null;
 
   // The shell answers as soon as it is up; retry briefly in case the window was faster.
   let proxy: { base: string; token: string } | null = null;
@@ -170,6 +178,26 @@ export async function tauriPlatform(): Promise<Platform> {
     setAutostart: (enabled) => (enabled ? autostart.enable() : autostart.disable()),
     version: () => getVersion(),
     openUrl: (url) => opener.openUrl(url),
+    async checkUpdate() {
+      pendingUpdate = await updater.check();
+      return pendingUpdate
+        ? { version: pendingUpdate.version, notes: pendingUpdate.body ?? '' }
+        : null;
+    },
+    async installUpdate(onProgress) {
+      if (!pendingUpdate) throw new Error('no update to install');
+      let total = 0;
+      let done = 0;
+      await pendingUpdate.downloadAndInstall((event) => {
+        if (event.event === 'Started') total = event.data.contentLength ?? 0;
+        else if (event.event === 'Progress') {
+          done += event.data.chunkLength;
+          onProgress(total > 0 ? Math.min(1, done / total) : null);
+        } else onProgress(1);
+      });
+      // Windows: the installer has already closed SysRadio and starts it again itself.
+      await processPlugin.relaunch();
+    },
     sendSnapshot: (snapshot) => void emitTo('mini', 'player-snapshot', snapshot).catch(() => {}),
     sendSpectrum: (levels) => void emitTo('mini', 'player-spectrum', levels).catch(() => {}),
     onCommand: (handler) => listenTo('player-command', handler),
@@ -323,6 +351,17 @@ export function browserPlatform(): Platform {
     setAutostart: async () => {},
     version: async () => '0.0.0-browser',
     openUrl: async (url) => void window.open(url, '_blank', 'noopener'),
+    // Tests simulate an update with localStorage `sysradio:fake-update` = version.
+    async checkUpdate() {
+      const version = localStorage.getItem('sysradio:fake-update');
+      return version ? { version, notes: 'Sample notes' } : null;
+    },
+    async installUpdate(onProgress) {
+      for (const step of [0.25, 0.5, 0.75, 1]) {
+        await new Promise((resolve) => setTimeout(resolve, 150));
+        onProgress(step);
+      }
+    },
     sendSnapshot: (snapshot) => post('snapshot', snapshot),
     sendSpectrum: (levels) => post('spectrum', levels),
     onCommand: (handler) => on('command', handler),

@@ -176,13 +176,30 @@ export const en: Messages = {
   'settings.version': (v) => `Version ${v}`,
   'settings.directory':
     'Station data from the free community directory radio-browser.info. Streams come directly from the stations.',
-  'settings.privacy': 'SysRadio collects no data. Favorites and settings stay on this device.',
+  'settings.privacy':
+    'SysRadio collects no data. Favorites and settings stay on this device. To find updates, SysRadio asks GitHub for the latest version.',
 
   'settings.openSource': 'SysRadio is free software under the MIT License.',
   'settings.sourceCode': 'Source code on GitHub',
   'settings.licenses': 'Third-party licenses',
   'settings.close': 'Close',
   'settings.loading': 'Loading…',
+
+  'settings.autoUpdate': 'Check for updates automatically',
+
+  'update.label': 'Update',
+  'update.available': (version) => `Version ${version} is available.`,
+  'update.install': 'Update now',
+  'update.later': 'Later',
+  'update.notes': 'What’s new?',
+  'update.downloading': (percent) => `Downloading update… ${percent}%`,
+  'update.downloadingUnknown': 'Downloading update…',
+  'update.installing': 'Installing the update, SysRadio will restart in a moment…',
+  'update.failed': 'The update did not work. Please try again later.',
+  'update.check': 'Check for updates',
+  'update.checking': 'Checking for updates…',
+  'update.upToDate': 'SysRadio is up to date.',
+  'update.checkFailed': 'Could not check for updates.',
 
   'shortcuts.title': 'Keyboard shortcuts',
   'shortcuts.action': 'Action',

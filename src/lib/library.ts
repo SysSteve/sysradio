@@ -21,6 +21,7 @@ export const defaultSettings: Settings = {
   language: 'auto',
   announceTitles: false,
   visualizer: true,
+  autoUpdate: true,
   eq: defaultEq,
   shortcuts: defaultShortcuts(),
 };
@@ -51,6 +52,7 @@ export function restoreSettings(raw: unknown): Settings {
       : 'auto',
     announceTitles: bool('announceTitles'),
     visualizer: bool('visualizer'),
+    autoUpdate: bool('autoUpdate'),
     eq: restoreEq(value.eq),
     shortcuts: restoreShortcuts(value.shortcuts),
   };

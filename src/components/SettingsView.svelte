@@ -75,6 +75,12 @@
       set: (v: boolean) => (app.settings.visualizer = v),
     },
     {
+      id: 'auto-update',
+      label: t('settings.autoUpdate'),
+      checked: app.settings.autoUpdate,
+      set: (v: boolean) => (app.settings.autoUpdate = v),
+    },
+    {
       id: 'announce',
       label: t('settings.announce'),
       checked: app.settings.announceTitles,
@@ -127,6 +133,24 @@
     </p>
     <p class="hint">{t('settings.directory')}</p>
     <p class="hint">{t('settings.privacy')}</p>
+    <div class="update-row">
+      <button
+        class="btn"
+        disabled={app.updateStatus === 'checking'}
+        onclick={() => app.checkForUpdate(true)}
+      >
+        {t('update.check')}
+      </button>
+      <p class="hint" role="status">
+        {#if app.updateStatus === 'checking'}{t('update.checking')}
+        {:else if app.updateStatus === 'current'}{t('update.upToDate')}
+        {:else if app.updateStatus === 'checkFailed'}{t('update.checkFailed')}
+        {:else if app.update && ['available', 'downloading', 'installing', 'failed'].includes(app.updateStatus)}{t(
+            'update.available',
+            app.update.version,
+          )}{/if}
+      </p>
+    </div>
     <p class="hint">{t('settings.openSource')}</p>
     <div class="links">
       <button class="btn" onclick={() => app.platform.openUrl(SOURCE_URL)}
@@ -193,6 +217,13 @@
   .hint {
     font-size: var(--font-size-sm);
     color: var(--text-muted);
+  }
+
+  .update-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2) var(--space-3);
   }
 
   .links {

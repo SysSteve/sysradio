@@ -132,7 +132,7 @@ pnpm tauri build    # installers in src-tauri/target/release/bundle
 pnpm check          # format, types, unit tests
 ```
 
-Architecture notes (in German) are in [docs/architektur.md](docs/architektur.md).
+How it is built: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## How it works
 

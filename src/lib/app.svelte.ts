@@ -19,6 +19,7 @@ import type {
   Settings,
   ShortcutAction,
   Station,
+  UpdateInfo,
 } from './types';
 
 export type Tab = 'favorites' | 'search' | 'recent' | 'eq' | 'settings';
@@ -37,6 +38,19 @@ export interface CustomStationInput {
 }
 
 const VOLUME_STEP = 0.05;
+/** First automatic update check after start, then every few hours. */
+const UPDATE_FIRST_CHECK_MS = 8_000;
+const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
+
+export type UpdateStatus =
+  | 'idle'
+  | 'checking'
+  | 'current'
+  | 'checkFailed'
+  | 'available'
+  | 'downloading'
+  | 'installing'
+  | 'failed';
 
 /** Application state of the main window, shared by all components. */
 export class AppState {
@@ -47,6 +61,12 @@ export class AppState {
   ready = $state(false);
   /** System-wide shortcuts another program already holds. */
   globalFailures = $state<ShortcutAction[]>([]);
+  update = $state<UpdateInfo | null>(null);
+  updateStatus = $state<UpdateStatus>('idle');
+  /** 0–1 while downloading; null when the size is unknown. */
+  updateProgress = $state<number | null>(null);
+  /** "Later" hides the notice until the next start. */
+  updateDismissed = $state(false);
   /** Text for screen readers after drag and drop or similar silent changes. */
   announcement = $state('');
   readonly systemLanguage: string;
@@ -113,6 +133,7 @@ export class AppState {
     this.ready = true;
     await this.platform.showUi(this.settings.mini);
     void this.refreshFavorites();
+    this.#scheduleUpdateChecks();
   }
 
   /** Stream URLs change over time; favourites pick up the directory's current data. */
@@ -275,6 +296,51 @@ export class AppState {
       case 'show':
         return void this.platform.showWindow();
     }
+  }
+
+  // --- Updates -----------------------------------------------------------------------------
+
+  #scheduleUpdateChecks() {
+    const auto = () => {
+      if (this.settings.autoUpdate) void this.checkForUpdate(false);
+    };
+    setTimeout(auto, UPDATE_FIRST_CHECK_MS);
+    setInterval(auto, UPDATE_INTERVAL_MS);
+  }
+
+  /** `manual`: the user asked, so "up to date" and errors are shown too. */
+  async checkForUpdate(manual: boolean) {
+    if (['checking', 'downloading', 'installing'].includes(this.updateStatus)) return;
+    if (manual) this.updateStatus = 'checking';
+    try {
+      const found = await this.platform.checkUpdate();
+      this.update = found;
+      if (found) {
+        this.updateStatus = 'available';
+        if (manual) this.updateDismissed = false;
+      } else if (manual) this.updateStatus = 'current';
+    } catch {
+      if (manual) this.updateStatus = 'checkFailed';
+    }
+  }
+
+  async installUpdate() {
+    if (!this.update) return;
+    this.updateStatus = 'downloading';
+    this.updateProgress = 0;
+    try {
+      await this.platform.installUpdate((fraction) => {
+        this.updateProgress = fraction;
+        if (fraction === 1) this.updateStatus = 'installing';
+      });
+      this.updateStatus = 'installing';
+    } catch {
+      this.updateStatus = 'failed';
+    }
+  }
+
+  releaseNotesUrl(version: string) {
+    return `https://github.com/SysSteve/sysradio/releases/tag/v${version}`;
   }
 
   // --- Equalizer ---------------------------------------------------------------------------

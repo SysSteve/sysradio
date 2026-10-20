@@ -5,3 +5,6 @@ src-tauri/icons/
 pnpm-lock.yaml
 test-results/
 src/styles/tokens.css
+
+CLAUDE.md
+internal/

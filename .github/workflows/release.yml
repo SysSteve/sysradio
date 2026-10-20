@@ -52,10 +52,16 @@ jobs:
       - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # Signs the update packages; the app only installs updates signed with this key.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           args: ${{ matrix.args }}
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: SysRadio ${{ github.ref_name }}
           releaseBody: ${{ env.RELEASE_NOTES }}
           releaseDraft: true
+          # latest.json for the in-app updater (prefers the NSIS setup on Windows).
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
           uploadWorkflowArtifacts: true

@@ -181,13 +181,29 @@ export const fr: Messages = {
   'settings.directory':
     'Données des stations issues de l’annuaire communautaire et gratuit radio-browser.info. Les flux viennent directement des stations.',
   'settings.privacy':
-    'SysRadio ne collecte aucune donnée. Tes favoris et tes paramètres restent sur cet appareil.',
+    'SysRadio ne collecte aucune donnée. Tes favoris et tes paramètres restent sur cet appareil. Pour les mises à jour, SysRadio demande à GitHub la dernière version.',
 
   'settings.openSource': 'SysRadio est un logiciel libre sous licence MIT.',
   'settings.sourceCode': 'Code source sur GitHub',
   'settings.licenses': 'Licences tierces',
   'settings.close': 'Fermer',
   'settings.loading': 'Chargement…',
+
+  'settings.autoUpdate': 'Rechercher automatiquement les mises à jour',
+
+  'update.label': 'Mise à jour',
+  'update.available': (version) => `La version ${version} est disponible.`,
+  'update.install': 'Mettre à jour',
+  'update.later': 'Plus tard',
+  'update.notes': 'Quoi de neuf\u202f?',
+  'update.downloading': (percent) => `Téléchargement de la mise à jour… ${percent}\u00a0%`,
+  'update.downloadingUnknown': 'Téléchargement de la mise à jour…',
+  'update.installing': 'Installation de la mise à jour, SysRadio va redémarrer…',
+  'update.failed': 'La mise à jour a échoué. Réessaie plus tard.',
+  'update.check': 'Rechercher des mises à jour',
+  'update.checking': 'Recherche de mises à jour…',
+  'update.upToDate': 'SysRadio est à jour.',
+  'update.checkFailed': 'La recherche de mises à jour a échoué.',
 
   'shortcuts.title': 'Raccourcis clavier',
   'shortcuts.action': 'Action',

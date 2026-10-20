@@ -6,6 +6,16 @@ All notable changes to SysRadio. The format follows
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-20
+
+### Added
+
+- Automatic updates: SysRadio looks for a new version on start and every six hours and offers
+  it with one click ("Update now", "What's new?", "Later"). Updates are signed; SysRadio only
+  installs updates signed by the project. Turn this off under Settings, or check manually under
+  Settings → About.
+- System requirements in the README and the release notes.
+
 ## [0.2.2] - 2026-10-20
 
 ### Fixed
@@ -62,7 +72,8 @@ All notable changes to SysRadio. The format follows
 First version: search, favorites, history, now playing, tray, media keys, autostart, English
 and German.
 
-[Unreleased]: https://github.com/SysSteve/sysradio/compare/v0.2.2...HEAD
+[Unreleased]: https://github.com/SysSteve/sysradio/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/SysSteve/sysradio/releases/tag/v0.3.0
 [0.2.2]: https://github.com/SysSteve/sysradio/releases/tag/v0.2.2
 [0.2.1]: https://github.com/SysSteve/sysradio/releases/tag/v0.2.1
 [0.2.0]: https://github.com/SysSteve/sysradio/commits/v0.2.0

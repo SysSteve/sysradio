@@ -58,6 +58,15 @@ const VIEWS: { name: string; favorites?: string[]; prepare: (page: Page) => Prom
     },
   },
   {
+    name: 'update notice',
+    prepare: async (page) => {
+      await page.evaluate(() => localStorage.setItem('sysradio:fake-update', '9.9.9'));
+      await page.getByRole('tab', { name: 'Einstellungen' }).click();
+      await page.getByRole('button', { name: 'Nach Updates suchen' }).click();
+      await expect(page.getByText('Version 9.9.9 ist verfügbar.').first()).toBeVisible();
+    },
+  },
+  {
     name: 'settings, recording a shortcut',
     prepare: async (page) => {
       await page.getByRole('tab', { name: 'Einstellungen' }).click();

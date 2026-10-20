@@ -128,8 +128,16 @@ export interface Settings {
   language: Language;
   announceTitles: boolean;
   visualizer: boolean;
+  /** Look for new versions on start and every few hours. */
+  autoUpdate: boolean;
   eq: EqSettings;
   shortcuts: Shortcuts;
+}
+
+/** A newer version offered by the updater. */
+export interface UpdateInfo {
+  version: string;
+  notes: string;
 }
 
 export interface LibraryData {

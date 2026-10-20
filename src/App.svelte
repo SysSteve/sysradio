@@ -16,6 +16,7 @@
   import RecentView from './components/RecentView.svelte';
   import SearchView from './components/SearchView.svelte';
   import SettingsView from './components/SettingsView.svelte';
+  import UpdateBanner from './components/UpdateBanner.svelte';
 
   let { app }: { app: AppState } = $props();
   const t = $derived(app.t);
@@ -223,6 +224,7 @@
   </div>
 
   <main id="inhalt" tabindex="-1">
+    <UpdateBanner {app} />
     <Notice {app} />
     <div id="panel" role="tabpanel" aria-labelledby="tab-{app.tab}">
       {#if app.tab === 'favorites'}

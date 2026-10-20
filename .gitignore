@@ -6,3 +6,9 @@ test-results/
 playwright-report/
 .env
 *.log
+
+# Private notes, linked in from a separate private repository; never committed here.
+/CLAUDE.md
+/CLAUDE.local.md
+/internal
+/.claude/
