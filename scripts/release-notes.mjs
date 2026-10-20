@@ -1,5 +1,7 @@
 // Prints the release notes for a version from CHANGELOG.md, followed by install notes.
 //   node scripts/release-notes.mjs 0.2.1
+import { resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
 
 export function notesFor(changelog, version) {
@@ -19,7 +21,8 @@ Requirements: internet connection; on Windows the Microsoft Edge WebView2 runtim
 
 The installers are not code-signed yet. Windows may show "Windows protected your PC": choose **More info → Run anyway**; with Smart App Control on, Windows 11 blocks unsigned apps until code signing is in place. On macOS, the first start says Apple could not verify the app: open **System Settings → Privacy & Security**, click **Open Anyway** and confirm with **Open**.`;
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+// Run directly (not imported)? Compared as paths, so it also works on Windows.
+if (process.argv[1] && fileURLToPath(import.meta.url) === resolve(process.argv[1])) {
   const version = (process.argv[2] ?? '').replace(/^v/, '');
   const changelog = readFileSync(new URL('../CHANGELOG.md', import.meta.url), 'utf8');
   console.log(`${notesFor(changelog, version)}\n\n${INSTALL.replaceAll('<version>', version)}`);

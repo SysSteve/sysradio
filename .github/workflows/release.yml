@@ -35,9 +35,12 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         shell: bash
         run: |
+          node scripts/release-notes.mjs "${{ github.ref_name }}" > release-notes.md
+          # Never publish a release without notes.
+          test -s release-notes.md
           {
             echo 'RELEASE_NOTES<<__NOTES__'
-            node scripts/release-notes.mjs "${{ github.ref_name }}"
+            cat release-notes.md
             echo '__NOTES__'
           } >> "$GITHUB_ENV"
       - name: Rust toolchain (from src-tauri/rust-toolchain.toml)
