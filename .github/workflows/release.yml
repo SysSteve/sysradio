@@ -1,6 +1,7 @@
 # Builds the installers: Windows (NSIS setup.exe) and macOS (universal .dmg).
 # - Manually ("Run workflow"): installers as workflow artifacts, for testing.
-# - Tag v*: additionally a draft GitHub release with the installers attached.
+# - Tag v*: additionally a draft GitHub release with the installers attached; the notes come
+#   from CHANGELOG.md (scripts/release-notes.mjs). Review the draft, then publish it.
 name: Release
 on:
   push:
@@ -30,6 +31,15 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Release notes from CHANGELOG.md
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: |
+          {
+            echo 'RELEASE_NOTES<<__NOTES__'
+            node scripts/release-notes.mjs "${{ github.ref_name }}"
+            echo '__NOTES__'
+          } >> "$GITHUB_ENV"
       - name: Rust toolchain (from src-tauri/rust-toolchain.toml)
         working-directory: src-tauri
         shell: bash
@@ -46,5 +56,6 @@ jobs:
           args: ${{ matrix.args }}
           tagName: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || '' }}
           releaseName: SysRadio ${{ github.ref_name }}
+          releaseBody: ${{ env.RELEASE_NOTES }}
           releaseDraft: true
           uploadWorkflowArtifacts: true
