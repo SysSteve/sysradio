@@ -111,7 +111,17 @@ export async function tauriPlatform(): Promise<Platform> {
   const shortcuts = await import('@tauri-apps/plugin-global-shortcut');
   const opener = await import('@tauri-apps/plugin-opener');
 
-  const { base, token } = await invoke<{ base: string; token: string }>('proxy_info');
+  // The shell answers as soon as it is up; retry briefly in case the window was faster.
+  let proxy: { base: string; token: string } | null = null;
+  for (let attempt = 0; !proxy; attempt++) {
+    try {
+      proxy = await invoke<{ base: string; token: string }>('proxy_info');
+    } catch (e) {
+      if (attempt >= 20) throw e;
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+  }
+  const { base, token } = proxy;
   const store = await load('sysradio.json', { defaults: {}, autoSave: 300 });
   const win = getCurrentWindow();
   const listenTo = <T>(event: string, handler: (payload: T) => void) =>

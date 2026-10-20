@@ -7,7 +7,7 @@ mod mixer;
 
 use serde::Deserialize;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 use streamproxy::directory::{Directory, Facet, Search, Station};
 use streamproxy::proxy::{self, ProxyInfo, TitleEvent};
@@ -316,7 +316,31 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
 pub fn run() {
     streamproxy::init_tls();
     let started_hidden = std::env::args().any(|a| a == MINIMIZED_ARG);
+
+    // The state must exist before any window loads: on Windows the web view can call commands
+    // before `setup` has run (2026-10-20, 0.2.0 started with an empty window). The proxy is
+    // therefore started here; its title events reach the app once the handle exists.
+    let handle_slot: Arc<OnceLock<AppHandle>> = Arc::new(OnceLock::new());
+    let slot = handle_slot.clone();
+    let sink: proxy::TitleSink = Arc::new(move |event: TitleEvent| {
+        if let Some(handle) = slot.get() {
+            let _ = handle.emit("now-playing", event);
+        }
+    });
+    let proxy = tauri::async_runtime::block_on(proxy::start(USER_AGENT, sink))
+        .expect("could not start the local stream proxy");
+    let state = Arc::new(AppState {
+        directory: Directory::new(USER_AGENT),
+        resolver: Resolver::new(USER_AGENT),
+        proxy,
+        close_to_tray: AtomicBool::new(true),
+        mini_mode: AtomicBool::new(false),
+        ui_shown: AtomicBool::new(false),
+        started_hidden,
+    });
+
     tauri::Builder::default()
+        .manage(state)
         // Must come first: a second start only brings the running window to the front.
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_window(app)
@@ -354,20 +378,7 @@ pub fn run() {
                 "SysRadio {} starting (hidden: {started_hidden})",
                 env!("CARGO_PKG_VERSION")
             );
-            let handle = app.handle().clone();
-            let sink: proxy::TitleSink = Arc::new(move |event: TitleEvent| {
-                let _ = handle.emit("now-playing", event);
-            });
-            let proxy = tauri::async_runtime::block_on(proxy::start(USER_AGENT, sink))?;
-            app.manage(Arc::new(AppState {
-                directory: Directory::new(USER_AGENT),
-                resolver: Resolver::new(USER_AGENT),
-                proxy,
-                close_to_tray: AtomicBool::new(true),
-                mini_mode: AtomicBool::new(false),
-                ui_shown: AtomicBool::new(false),
-                started_hidden,
-            }));
+            let _ = handle_slot.set(app.handle().clone());
             build_tray(app.handle())?;
             if !started_hidden {
                 let handle = app.handle().clone();

@@ -6,6 +6,13 @@ All notable changes to SysRadio. The format follows
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-10-20
+
+### Fixed
+
+- On Windows, version 0.2.0 and 0.2.1 could start with an empty window, because the interface
+  asked the app for its stream proxy before the app was ready.
+
 ## [0.2.1] - 2026-10-20
 
 ### Added
@@ -55,7 +62,8 @@ All notable changes to SysRadio. The format follows
 First version: search, favorites, history, now playing, tray, media keys, autostart, English
 and German.
 
-[Unreleased]: https://github.com/SysSteve/sysradio/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/SysSteve/sysradio/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/SysSteve/sysradio/releases/tag/v0.2.2
 [0.2.1]: https://github.com/SysSteve/sysradio/releases/tag/v0.2.1
 [0.2.0]: https://github.com/SysSteve/sysradio/commits/v0.2.0
 [0.1.1]: https://github.com/SysSteve/sysradio/commits/v0.1.1
