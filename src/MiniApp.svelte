@@ -1,5 +1,6 @@
 <script lang="ts">
   import LoaderCircle from '@lucide/svelte/icons/loader-circle';
+  import Download from '@lucide/svelte/icons/download';
   import Maximize from '@lucide/svelte/icons/maximize-2';
   import Play from '@lucide/svelte/icons/play';
   import SkipBack from '@lucide/svelte/icons/skip-back';
@@ -177,6 +178,14 @@
   </div>
 
   <div class="window">
+    {#if snap?.updateVersion}
+      <button
+        class="btn update"
+        aria-label={t('update.miniHint', snap.updateVersion)}
+        use:tooltip={{ text: t('update.miniHint', snap.updateVersion) }}
+        onclick={() => send({ type: 'mini' })}><Download size={16} aria-hidden="true" /></button
+      >
+    {/if}
     <button
       class="btn"
       aria-label={t('mini.expand')}
@@ -315,6 +324,11 @@
   .window .btn {
     width: 28px;
     height: 28px;
+  }
+
+  .window .update {
+    color: var(--viz-1);
+    opacity: 1;
   }
 
   .btn:hover:not(:disabled) {

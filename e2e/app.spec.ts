@@ -219,25 +219,37 @@ test('floating player mirrors and controls the main window', async ({ page, cont
   }
 });
 
-test('updates: manual check, notice, progress, later', async ({ page }) => {
+test('updates: bar on start, close, skip version, manual check, install', async ({ page }) => {
+  await open(page, ['s1']);
+  await page.evaluate(() => localStorage.setItem('sysradio:fake-update', '9.9.9'));
+  await page.reload();
+  const bar = page.getByRole('region', { name: 'Update' });
+  // Appears on its own a few seconds after start, whatever tab is open.
+  await page.getByRole('tab', { name: 'Equalizer' }).click();
+  await expect(bar.getByText('Version 9.9.9 ist verfügbar.')).toBeVisible({ timeout: 8000 });
+  await bar.getByRole('button', { name: 'Hinweis schließen' }).click();
+  await expect(bar).toBeHidden();
+  // A skipped version stays quiet after a restart, but a manual check shows it.
+  await page.reload();
+  await expect(bar).toBeVisible({ timeout: 8000 });
+  await bar.getByRole('button', { name: 'Diese Version überspringen' }).click();
+  await page.reload();
+  await page.waitForTimeout(4500);
+  await expect(bar).toBeHidden();
+  await page.getByRole('tab', { name: 'Einstellungen' }).click();
+  await page.getByRole('button', { name: 'Nach Updates suchen' }).click();
+  await bar.getByRole('button', { name: 'Jetzt aktualisieren' }).click();
+  await expect(bar.getByText(/Update wird geladen/)).toBeVisible();
+  await expect(
+    bar.getByText('Update wird installiert, SysRadio startet gleich neu …'),
+  ).toBeVisible();
+});
+
+test('updates: up to date message', async ({ page }) => {
   await open(page);
   await page.getByRole('tab', { name: 'Einstellungen' }).click();
   await page.getByRole('button', { name: 'Nach Updates suchen' }).click();
   await expect(page.getByText('SysRadio ist auf dem neuesten Stand.')).toBeVisible();
-
-  await page.evaluate(() => localStorage.setItem('sysradio:fake-update', '9.9.9'));
-  await page.getByRole('button', { name: 'Nach Updates suchen' }).click();
-  const notice = page.getByRole('region', { name: 'Update' });
-  await expect(notice.getByText('Version 9.9.9 ist verfügbar.')).toBeVisible();
-  await notice.getByRole('button', { name: 'Später' }).click();
-  await expect(notice).toBeHidden();
-
-  await page.getByRole('button', { name: 'Nach Updates suchen' }).click();
-  await notice.getByRole('button', { name: 'Jetzt aktualisieren' }).click();
-  await expect(notice.getByText(/Update wird geladen/)).toBeVisible();
-  await expect(
-    notice.getByText('Update wird installiert, SysRadio startet gleich neu …'),
-  ).toBeVisible();
 });
 
 test('sleep timer stops playback after the chosen time', async ({ page }) => {
@@ -247,6 +259,15 @@ test('sleep timer stops playback after the chosen time', async ({ page }) => {
   const player = page.getByRole('region', { name: 'Player' });
   await expect(player.getByRole('button', { name: 'Stopp' })).toBeVisible();
   await player.getByRole('button', { name: 'Schlaf-Timer' }).click();
+  // Really on top (not clipped by the player): the element at the option's centre is the option.
+  for (const name of ['Aus', '15 Minuten', '90 Minuten']) {
+    const box = (await page.getByRole('radio', { name }).boundingBox())!;
+    const hit = await page.evaluate(
+      ([x, y]) => document.elementFromPoint(x!, y!)?.closest('label')?.textContent?.trim(),
+      [box.x + box.width / 2, box.y + box.height / 2],
+    );
+    expect(hit, name).toBe(name);
+  }
   await page.getByRole('radio', { name: '15 Minuten' }).click();
   await expect(
     player.getByRole('button', { name: 'Schlaf-Timer: stoppt in 15 Min.' }),

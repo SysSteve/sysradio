@@ -1,7 +1,7 @@
 {
   "name": "sysradio",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Internet radio player for Windows and macOS",
   "license": "MIT",
   "repository": {

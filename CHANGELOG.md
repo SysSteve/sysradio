@@ -6,6 +6,19 @@ All notable changes to SysRadio. The format follows
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-10-20
+
+### Changed
+
+- The update notice is a bar at the bottom of the window, visible in every section. Close it
+  for now, or skip the offered version until a newer one comes out. The floating player shows
+  a small update symbol.
+- The first update check runs three seconds after start.
+
+### Fixed
+
+- The sleep timer menu was cut off by the player and partly hidden.
+
 ## [0.3.1] - 2026-10-20
 
 ### Added
@@ -84,7 +97,8 @@ All notable changes to SysRadio. The format follows
 First version: search, favorites, history, now playing, tray, media keys, autostart, English
 and German.
 
-[Unreleased]: https://github.com/SysSteve/sysradio/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/SysSteve/sysradio/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/SysSteve/sysradio/releases/tag/v0.3.2
 [0.3.1]: https://github.com/SysSteve/sysradio/releases/tag/v0.3.1
 [0.3.0]: https://github.com/SysSteve/sysradio/releases/tag/v0.3.0
 [0.2.2]: https://github.com/SysSteve/sysradio/releases/tag/v0.2.2

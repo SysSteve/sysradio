@@ -202,6 +202,10 @@ export const fr: Messages = {
   'update.install': 'Mettre à jour',
   'update.later': 'Plus tard',
   'update.notes': 'Quoi de neuf\u202f?',
+  'update.close': 'Fermer l’avis',
+  'update.skip': 'Ignorer cette version',
+  'update.miniHint': (version) =>
+    `Mise à jour ${version} disponible\u00a0: ouvrir la fenêtre complète`,
   'update.downloading': (percent) => `Téléchargement de la mise à jour… ${percent}\u00a0%`,
   'update.downloadingUnknown': 'Téléchargement de la mise à jour…',
   'update.installing': 'Installation de la mise à jour, SysRadio va redémarrer…',

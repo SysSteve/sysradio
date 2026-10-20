@@ -1,7 +1,9 @@
 <script lang="ts">
   import Download from '@lucide/svelte/icons/download';
+  import X from '@lucide/svelte/icons/x';
   import type { AppState } from '../lib/app.svelte';
 
+  /** Update bar at the bottom of the window: always visible, can be closed or the version skipped. */
   let { app }: { app: AppState } = $props();
   const t = $derived(app.t);
   const status = $derived(app.updateStatus);
@@ -13,11 +15,12 @@
   const percent = $derived(
     app.updateProgress === null ? null : Math.round(app.updateProgress * 100),
   );
+  const busy = $derived(status === 'downloading' || status === 'installing');
 </script>
 
 {#if shown && app.update}
   <section class="update" aria-label={t('update.label')}>
-    <Download size={20} aria-hidden="true" />
+    <Download size={18} aria-hidden="true" />
     <div class="body">
       <p class="title" role="status">
         {#if status === 'downloading'}
@@ -33,9 +36,9 @@
       {#if status === 'downloading'}
         <div class="bar" aria-hidden="true"><span style:width="{percent ?? 30}%"></span></div>
       {/if}
-      {#if status === 'available' || status === 'failed'}
+      {#if !busy}
         <div class="actions">
-          <button class="btn btn-primary" onclick={() => app.installUpdate()}
+          <button class="btn btn-primary small" onclick={() => app.installUpdate()}
             >{t('update.install')}</button
           >
           <button
@@ -44,38 +47,45 @@
               app.update && app.platform.openUrl(app.releaseNotesUrl(app.update.version))}
             >{t('update.notes')}</button
           >
-          <button class="btn-link" onclick={() => (app.updateDismissed = true)}
-            >{t('update.later')}</button
-          >
+          <button class="btn-link" onclick={() => app.skipUpdate()}>{t('update.skip')}</button>
         </div>
       {/if}
     </div>
+    {#if !busy}
+      <button
+        class="icon-btn close"
+        aria-label={t('update.close')}
+        onclick={() => (app.updateDismissed = true)}
+      >
+        <X size={18} aria-hidden="true" />
+      </button>
+    {/if}
   </section>
 {/if}
 
 <style>
   .update {
     display: flex;
+    align-items: flex-start;
     gap: var(--space-3);
-    margin: var(--space-2) var(--space-3) 0;
-    padding: var(--space-3);
-    border: 1px solid var(--brand);
-    border-radius: var(--radius-lg);
+    padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
+    border-top: 2px solid var(--brand);
     background: var(--brand-soft);
     color: var(--text);
   }
 
   .update > :global(svg) {
     flex: none;
-    margin-top: 2px;
+    margin-top: 9px;
     color: var(--brand);
   }
 
   .body {
     display: grid;
-    gap: var(--space-2);
+    gap: var(--space-1);
     flex: 1;
     min-width: 0;
+    padding-top: 6px;
   }
 
   .title {
@@ -89,8 +99,18 @@
     gap: var(--space-1) var(--space-2);
   }
 
+  .small {
+    min-height: 32px;
+    padding: 0 var(--space-3);
+  }
+
+  .close {
+    color: var(--text);
+  }
+
   .bar {
     height: 6px;
+    margin-bottom: var(--space-1);
     overflow: hidden;
     border-radius: var(--radius-pill);
     background: var(--surface);

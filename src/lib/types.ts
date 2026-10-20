@@ -130,6 +130,8 @@ export interface Settings {
   visualizer: boolean;
   /** Look for new versions on start and every few hours. */
   autoUpdate: boolean;
+  /** A version the user chose to skip; newer ones are offered again. */
+  skipVersion: string | null;
   eq: EqSettings;
   shortcuts: Shortcuts;
 }
@@ -157,6 +159,8 @@ export interface PlayerSnapshot {
   locale: Exclude<Language, 'auto'>;
   visualizer: boolean;
   shortcuts: Shortcuts;
+  /** A newer version is waiting (shown as a small hint in the floating player). */
+  updateVersion: string | null;
 }
 
 /** What the floating player asks the main window to do. */

@@ -1,6 +1,7 @@
 <script lang="ts">
   import Moon from '@lucide/svelte/icons/moon';
   import type { AppState } from '../lib/app.svelte';
+  import { portal } from '../lib/portal';
   import { tooltip } from '../lib/tooltip';
 
   /** Moon button with a small panel of radio buttons: off, 15 … 90 minutes. */
@@ -9,8 +10,11 @@
   const OPTIONS = [15, 30, 45, 60, 90];
 
   let open = $state(false);
+  /** Fixed position next to the button: the player clips everything that sticks out. */
+  let place = $state({ top: 0, right: 0 });
   let root: HTMLDivElement | undefined = $state();
   let button: HTMLButtonElement | undefined = $state();
+  let panel: HTMLFieldSetElement | undefined = $state();
   const left = $derived(app.sleepMinutesLeft);
   const label = $derived(left === null ? t('sleep.label') : t('sleep.remaining', left));
   /** Minutes of the running timer, rounded to the option it was started with. */
@@ -30,7 +34,8 @@
   $effect(() => {
     if (!open) return;
     const outside = (e: PointerEvent) => {
-      if (root && !root.contains(e.target as Node)) open = false;
+      const target = e.target as Node;
+      if (!root?.contains(target) && !panel?.contains(target)) open = false;
     };
     const escape = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
@@ -39,11 +44,14 @@
         button?.focus();
       }
     };
+    const close = () => (open = false);
     document.addEventListener('pointerdown', outside, true);
     document.addEventListener('keydown', escape, true);
+    window.addEventListener('resize', close);
     return () => {
       document.removeEventListener('pointerdown', outside, true);
       document.removeEventListener('keydown', escape, true);
+      window.removeEventListener('resize', close);
     };
   });
 </script>
@@ -57,13 +65,29 @@
     aria-expanded={open}
     aria-controls="sleep-panel"
     use:tooltip={{ text: label }}
-    onclick={() => (open = !open)}
+    onclick={() => {
+      if (!open && button) {
+        const rect = button.getBoundingClientRect();
+        place = {
+          top: Math.round(rect.bottom + 6),
+          right: Math.max(8, Math.round(window.innerWidth - rect.right)),
+        };
+      }
+      open = !open;
+    }}
   >
     <Moon size={18} aria-hidden="true" />
     {#if left !== null}<span class="badge" aria-hidden="true">{left}</span>{/if}
   </button>
   {#if open}
-    <fieldset id="sleep-panel" class="panel">
+    <fieldset
+      bind:this={panel}
+      use:portal
+      id="sleep-panel"
+      class="panel"
+      style:top="{place.top}px"
+      style:right="{place.right}px"
+    >
       <legend>{t('sleep.label')}</legend>
       <label class="option">
         <input type="radio" name="sleep" checked={chosen === null} onchange={() => choose(null)} />
@@ -129,10 +153,10 @@
   }
 
   .panel {
-    position: absolute;
-    right: 0;
-    top: calc(100% + 6px);
-    z-index: 20;
+    position: fixed;
+    z-index: 900;
+    max-height: calc(100vh - 16px);
+    overflow-y: auto;
     display: grid;
     min-width: 170px;
     margin: 0;
@@ -144,14 +168,18 @@
     box-shadow: var(--shadow-float);
   }
 
+  /* Inside the panel instead of on its border (float takes the legend out of the border). */
   legend {
-    padding: 0 var(--space-1);
+    float: left;
+    width: 100%;
+    padding: var(--space-1) var(--space-2) var(--space-2);
     font-size: var(--font-size-sm);
     font-weight: 700;
     color: var(--text-muted);
   }
 
   .option {
+    clear: both;
     display: flex;
     align-items: center;
     gap: var(--space-2);

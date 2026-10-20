@@ -199,6 +199,10 @@ export const es: Messages = {
   'update.install': 'Actualizar ahora',
   'update.later': 'Más tarde',
   'update.notes': '¿Qué hay de nuevo?',
+  'update.close': 'Cerrar aviso',
+  'update.skip': 'Omitir esta versión',
+  'update.miniHint': (version) =>
+    `Actualización a ${version} disponible: abrir la ventana completa`,
   'update.downloading': (percent) => `Descargando la actualización… ${percent}\u00a0%`,
   'update.downloadingUnknown': 'Descargando la actualización…',
   'update.installing': 'Instalando la actualización, SysRadio se reiniciará enseguida…',

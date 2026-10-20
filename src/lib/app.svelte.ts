@@ -39,7 +39,7 @@ export interface CustomStationInput {
 
 const VOLUME_STEP = 0.05;
 /** First automatic update check after start, then every few hours. */
-const UPDATE_FIRST_CHECK_MS = 8_000;
+const UPDATE_FIRST_CHECK_MS = 3_000;
 const UPDATE_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
 export type UpdateStatus =
@@ -345,7 +345,9 @@ export class AppState {
       this.update = found;
       if (found) {
         this.updateStatus = 'available';
+        // A skipped version stays quiet unless the user asked.
         if (manual) this.updateDismissed = false;
+        else if (found.version === this.settings.skipVersion) this.updateDismissed = true;
       } else if (manual) this.updateStatus = 'current';
     } catch {
       if (manual) this.updateStatus = 'checkFailed';
@@ -365,6 +367,18 @@ export class AppState {
     } catch {
       this.updateStatus = 'failed';
     }
+  }
+
+  /** Hides the notice for this version until a newer one comes out. */
+  skipUpdate() {
+    if (this.update) this.settings.skipVersion = this.update.version;
+    this.updateDismissed = true;
+  }
+
+  get updateWaiting(): string | null {
+    return this.update && this.updateStatus === 'available' && !this.updateDismissed
+      ? this.update.version
+      : null;
   }
 
   releaseNotesUrl(version: string) {

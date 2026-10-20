@@ -109,6 +109,7 @@
       locale: app.locale,
       visualizer: app.settings.visualizer,
       shortcuts: $state.snapshot(app.settings.shortcuts),
+      updateVersion: app.updateWaiting,
     };
   }
   function sendSnapshot() {
@@ -224,7 +225,6 @@
   </div>
 
   <main id="inhalt" tabindex="-1">
-    <UpdateBanner {app} />
     <Notice {app} />
     <div id="panel" role="tabpanel" aria-labelledby="tab-{app.tab}">
       {#if app.tab === 'favorites'}
@@ -241,13 +241,15 @@
     </div>
   </main>
 
+  <UpdateBanner {app} />
+
   <p class="visually-hidden" role="status">{app.announcement}</p>
 </div>
 
 <style>
   .shell {
     display: grid;
-    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr) auto;
     height: 100%;
   }
 

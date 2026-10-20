@@ -22,6 +22,7 @@ export const defaultSettings: Settings = {
   announceTitles: false,
   visualizer: true,
   autoUpdate: true,
+  skipVersion: null,
   eq: defaultEq,
   shortcuts: defaultShortcuts(),
 };
@@ -53,6 +54,7 @@ export function restoreSettings(raw: unknown): Settings {
     announceTitles: bool('announceTitles'),
     visualizer: bool('visualizer'),
     autoUpdate: bool('autoUpdate'),
+    skipVersion: typeof value.skipVersion === 'string' ? value.skipVersion : null,
     eq: restoreEq(value.eq),
     shortcuts: restoreShortcuts(value.shortcuts),
   };
