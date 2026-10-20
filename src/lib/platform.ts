@@ -61,6 +61,8 @@ export interface Platform {
   getAutostart(): Promise<boolean>;
   setAutostart(enabled: boolean): Promise<void>;
   version(): Promise<string>;
+  /** Opens a web page in the default browser (only allowed addresses). */
+  openUrl(url: string): Promise<void>;
   /** Main window → floating player. */
   sendSnapshot(snapshot: PlayerSnapshot): void;
   sendSpectrum(levels: number[]): void;
@@ -107,6 +109,7 @@ export async function tauriPlatform(): Promise<Platform> {
   const { load } = await import('@tauri-apps/plugin-store');
   const autostart = await import('@tauri-apps/plugin-autostart');
   const shortcuts = await import('@tauri-apps/plugin-global-shortcut');
+  const opener = await import('@tauri-apps/plugin-opener');
 
   const { base, token } = await invoke<{ base: string; token: string }>('proxy_info');
   const store = await load('sysradio.json', { defaults: {}, autoSave: 300 });
@@ -156,6 +159,7 @@ export async function tauriPlatform(): Promise<Platform> {
     getAutostart: () => autostart.isEnabled(),
     setAutostart: (enabled) => (enabled ? autostart.enable() : autostart.disable()),
     version: () => getVersion(),
+    openUrl: (url) => opener.openUrl(url),
     sendSnapshot: (snapshot) => void emitTo('mini', 'player-snapshot', snapshot).catch(() => {}),
     sendSpectrum: (levels) => void emitTo('mini', 'player-spectrum', levels).catch(() => {}),
     onCommand: (handler) => listenTo('player-command', handler),
@@ -308,6 +312,7 @@ export function browserPlatform(): Platform {
     getAutostart: async () => false,
     setAutostart: async () => {},
     version: async () => '0.0.0-browser',
+    openUrl: async (url) => void window.open(url, '_blank', 'noopener'),
     sendSnapshot: (snapshot) => post('snapshot', snapshot),
     sendSpectrum: (levels) => post('spectrum', levels),
     onCommand: (handler) => on('command', handler),

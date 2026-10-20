@@ -180,6 +180,12 @@ export const es: Messages = {
   'settings.privacy':
     'SysRadio no recopila datos. Tus favoritos y ajustes se quedan en este dispositivo.',
 
+  'settings.openSource': 'SysRadio es software libre con licencia MIT.',
+  'settings.sourceCode': 'Código fuente en GitHub',
+  'settings.licenses': 'Licencias de terceros',
+  'settings.close': 'Cerrar',
+  'settings.loading': 'Cargando…',
+
   'shortcuts.title': 'Atajos de teclado',
   'shortcuts.action': 'Acción',
   'shortcuts.inApp': 'En la app',

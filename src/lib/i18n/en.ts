@@ -178,6 +178,12 @@ export const en: Messages = {
     'Station data from the free community directory radio-browser.info. Streams come directly from the stations.',
   'settings.privacy': 'SysRadio collects no data. Favorites and settings stay on this device.',
 
+  'settings.openSource': 'SysRadio is free software under the MIT License.',
+  'settings.sourceCode': 'Source code on GitHub',
+  'settings.licenses': 'Third-party licenses',
+  'settings.close': 'Close',
+  'settings.loading': 'Loading…',
+
   'shortcuts.title': 'Keyboard shortcuts',
   'shortcuts.action': 'Action',
   'shortcuts.inApp': 'In the app',

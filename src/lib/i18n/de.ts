@@ -179,6 +179,12 @@ export const de = {
   'settings.privacy':
     'SysRadio sammelt keine Daten. Favoriten und Einstellungen bleiben auf diesem Gerät.',
 
+  'settings.openSource': 'SysRadio ist freie Software unter der MIT-Lizenz.',
+  'settings.sourceCode': 'Quellcode auf GitHub',
+  'settings.licenses': 'Lizenzen von Drittanbietern',
+  'settings.close': 'Schließen',
+  'settings.loading': 'Lade …',
+
   'shortcuts.title': 'Tastenkürzel',
   'shortcuts.action': 'Aktion',
   'shortcuts.inApp': 'In der App',

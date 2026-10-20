@@ -172,6 +172,27 @@ button {
   font-size: var(--font-size-sm);
 }
 
+/* Start-up error (src/lib/startup.ts). */
+.startup-error {
+  display: grid;
+  gap: var(--space-3);
+  height: 100%;
+  padding: var(--space-5);
+  overflow: auto;
+}
+
+.startup-error pre {
+  margin: 0;
+  padding: var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-size: 0.75rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 /* Tooltips (src/lib/tooltip.ts). */
 .tooltip {
   position: fixed;

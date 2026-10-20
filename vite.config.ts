@@ -1,10 +1,12 @@
 /// <reference types="vitest/config" />
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import { defineConfig } from 'vite';
+// @ts-expect-error plain JS build script without type declarations
+import { licenses } from './scripts/licenses.mjs';
 
 // Tauri expects a fixed port in development and serves dist/ in the app.
 export default defineConfig({
-  plugins: [svelte()],
+  plugins: [svelte(), licenses()],
   clearScreen: false,
   server: { port: 1420, strictPort: true },
   build: {

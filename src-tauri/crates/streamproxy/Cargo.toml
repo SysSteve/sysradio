@@ -4,6 +4,8 @@ description = "Local stream proxy with ICY metadata extraction and a radio-brows
 edition.workspace = true
 version.workspace = true
 publish.workspace = true
+license.workspace = true
+repository.workspace = true
 
 [dependencies]
 bytes = "1.12.1"

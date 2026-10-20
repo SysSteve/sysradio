@@ -4,6 +4,8 @@
   import type { Language } from '../lib/types';
   import ShortcutEditor from './ShortcutEditor.svelte';
 
+  const SOURCE_URL = 'https://github.com/SysSteve/sysradio';
+
   let { app }: { app: AppState } = $props();
   const t = $derived(app.t);
 
@@ -19,6 +21,18 @@
       () => {},
     );
   });
+
+  let licenseDialog: HTMLDialogElement | undefined = $state();
+  let licenseText = $state('');
+  async function showLicenses() {
+    licenseDialog?.showModal();
+    if (licenseText) return;
+    try {
+      licenseText = await (await fetch('/third-party-licenses.txt')).text();
+    } catch {
+      licenseText = '—';
+    }
+  }
 
   async function setAutostart(enabled: boolean) {
     try {
@@ -113,7 +127,25 @@
     </p>
     <p class="hint">{t('settings.directory')}</p>
     <p class="hint">{t('settings.privacy')}</p>
+    <p class="hint">{t('settings.openSource')}</p>
+    <div class="links">
+      <button class="btn" onclick={() => app.platform.openUrl(SOURCE_URL)}
+        >{t('settings.sourceCode')}</button
+      >
+      <button class="btn" onclick={showLicenses}>{t('settings.licenses')}</button>
+    </div>
   </section>
+
+  <dialog bind:this={licenseDialog} class="licenses" aria-labelledby="licenses-title">
+    <div class="licenses-head">
+      <h2 id="licenses-title">{t('settings.licenses')}</h2>
+      <button class="btn" onclick={() => licenseDialog?.close()}>{t('settings.close')}</button>
+    </div>
+    <!-- Focusable so keyboard users can scroll the long text. -->
+    <!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+    <pre class="license-text" tabindex="0" aria-label={t('settings.licenses')}>{licenseText ||
+        t('settings.loading')}</pre>
+  </dialog>
 </div>
 
 <style>
@@ -161,5 +193,49 @@
   .hint {
     font-size: var(--font-size-sm);
     color: var(--text-muted);
+  }
+
+  .links {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .licenses {
+    width: min(720px, calc(100vw - 24px));
+    height: calc(100vh - 48px);
+    padding: 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-float);
+  }
+
+  .licenses[open] {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .licenses::backdrop {
+    background: rgb(10 6 40 / 0.45);
+  }
+
+  .licenses-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-3) var(--space-4);
+    border-bottom: 1px solid var(--border);
+  }
+
+  .license-text {
+    margin: 0;
+    padding: var(--space-4);
+    overflow: auto;
+    font-size: 0.75rem;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
   }
 </style>

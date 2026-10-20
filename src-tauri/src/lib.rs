@@ -14,7 +14,9 @@ use streamproxy::proxy::{self, ProxyInfo, TitleEvent};
 use streamproxy::resolve::{Resolved, Resolver};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::webview::PageLoadEvent;
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
+use tauri_plugin_log::{RotationStrategy, Target, TargetKind};
 use tauri_plugin_window_state::StateFlags;
 
 const USER_AGENT: &str = concat!("SysRadio/", env!("CARGO_PKG_VERSION"));
@@ -99,6 +101,13 @@ fn count_click(state: AppStateRef<'_>, id: String) {
     tauri::async_runtime::spawn(async move { state.directory.click(&id).await });
 }
 
+/// The web view reports an error (start-up failures, uncaught exceptions).
+#[tauri::command]
+fn frontend_error(message: String) {
+    log::error!("frontend: {message}");
+    eprintln!("frontend error: {message}");
+}
+
 /// Playback started: give our WebView2 audio session the app's name and icon (Windows mixer).
 #[tauri::command]
 fn audio_started() {
@@ -113,6 +122,7 @@ fn set_close_to_tray(state: AppStateRef<'_>, enabled: bool) {
 /// The frontend is ready: show the window of the stored mode (unless started into the tray).
 #[tauri::command]
 fn show_ui(app: AppHandle, state: AppStateRef<'_>, mini: bool) {
+    log::info!("UI ready (floating player: {mini})");
     state.mini_mode.store(mini, Ordering::Relaxed);
     if state.ui_shown.swap(true, Ordering::Relaxed) || state.started_hidden {
         return;
@@ -311,11 +321,27 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
             show_window(app)
         }))
+        // Log file for support: %LOCALAPPDATA%\de.syssteve.sysradio\logs (Windows),
+        // ~/Library/Logs/de.syssteve.sysradio (macOS).
+        .plugin(
+            tauri_plugin_log::Builder::new()
+                .targets([
+                    Target::new(TargetKind::LogDir {
+                        file_name: Some("sysradio".into()),
+                    }),
+                    Target::new(TargetKind::Stderr),
+                ])
+                .level(log::LevelFilter::Info)
+                .max_file_size(1_000_000)
+                .rotation_strategy(RotationStrategy::KeepOne)
+                .build(),
+        )
         .plugin(tauri_plugin_autostart::init(
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![MINIMIZED_ARG]),
         ))
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(
             tauri_plugin_window_state::Builder::default()
@@ -324,6 +350,10 @@ pub fn run() {
                 .build(),
         )
         .setup(move |app| {
+            log::info!(
+                "SysRadio {} starting (hidden: {started_hidden})",
+                env!("CARGO_PKG_VERSION")
+            );
             let handle = app.handle().clone();
             let sink: proxy::TitleSink = Arc::new(move |event: TitleEvent| {
                 let _ = handle.emit("now-playing", event);
@@ -345,11 +375,19 @@ pub fn run() {
                     tokio::time::sleep(SHOW_FALLBACK).await;
                     let state = handle.state::<Arc<AppState>>();
                     if !state.ui_shown.swap(true, Ordering::Relaxed) {
+                        log::warn!("the UI did not report ready within {SHOW_FALLBACK:?}; showing the window anyway");
                         show_window(&handle);
                     }
                 });
             }
             Ok(())
+        })
+        .on_page_load(|webview, payload| {
+            let event = match payload.event() {
+                PageLoadEvent::Started => "loading",
+                PageLoadEvent::Finished => "loaded",
+            };
+            log::info!("{} {event}: {}", webview.label(), payload.url());
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
@@ -365,6 +403,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             proxy_info,
+            frontend_error,
             search_stations,
             stations_by_id,
             directory_countries,

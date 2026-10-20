@@ -125,6 +125,9 @@ export class AppState {
         favorites: lib.refreshStations(this.library.favorites, fresh),
         recent: lib.refreshStations(this.library.recent, fresh),
       };
+      // The selected (not playing) station shows its fresh name and logo too.
+      const current = this.player.station && fresh.find((f) => f.id === this.player.station?.id);
+      if (current && !this.player.active) this.player.select(current);
     } catch {
       // Offline: the stored data still works for most stations.
     }

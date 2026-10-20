@@ -2,6 +2,7 @@
 ; crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi) with two changes marked "SysRadio":
 ; an older installed version is updated in place without asking (no uninstall, settings and
 ; favorites stay), and updates skip the folder page. Re-sync when updating @tauri-apps/cli.
+; Original: Copyright (c) Tauri Programme within The Commons Conservancy, MIT OR Apache-2.0.
 Unicode true
 ManifestDPIAware true
 ; Add in `dpiAwareness` `PerMonitorV2` to manifest for Windows 10 1607+ (note this should not affect lower versions since they should be able to ignore this and pick up `dpiAware` `true` set by `ManifestDPIAware true`)
