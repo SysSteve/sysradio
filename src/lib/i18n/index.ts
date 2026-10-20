@@ -1,14 +1,25 @@
 import type { Language } from '../types';
 import { de, type MessageKey, type Messages } from './de';
 import { en } from './en';
+import { es } from './es';
+import { fr } from './fr';
 
-export const languages = { de, en } satisfies Record<Exclude<Language, 'auto'>, Messages>;
+export const languages = { de, en, es, fr } satisfies Record<Exclude<Language, 'auto'>, Messages>;
 export type Locale = keyof typeof languages;
 
-/** `auto` follows the system: German for any `de-*`, English otherwise. */
+/** Names of the languages in themselves, for the language picker. */
+export const languageNames: Record<Locale, string> = {
+  de: 'Deutsch',
+  en: 'English',
+  es: 'Español',
+  fr: 'Français',
+};
+
+/** `auto` follows the system language when SysRadio speaks it, English otherwise. */
 export function resolveLocale(setting: Language, systemLanguage: string): Locale {
   if (setting !== 'auto') return setting;
-  return systemLanguage.toLowerCase().startsWith('de') ? 'de' : 'en';
+  const base = systemLanguage.toLowerCase().split(/[-_]/)[0] ?? '';
+  return base in languages ? (base as Locale) : 'en';
 }
 
 /** Region of the system language (`de-AT` → `AT`), used for "popular in your country". */

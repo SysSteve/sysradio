@@ -1,13 +1,17 @@
-//! SysRadio desktop shell: window, tray, autostart and the commands the web frontend calls.
-//! Playback itself happens in the web view (`<audio>`), fed by the local stream proxy.
+//! SysRadio desktop shell: windows, tray, autostart and the commands the web frontend calls.
+//! Playback itself happens in the main web view (`<audio>`), fed by the local stream proxy.
+//! The floating player is a second, small window ("mini") that remote-controls the main one;
+//! in mini mode the main window stays hidden (but alive, it plays the audio).
 
 mod mixer;
 
 use serde::Deserialize;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
-use streamproxy::directory::{Directory, Search, Station};
+use std::time::Duration;
+use streamproxy::directory::{Directory, Facet, Search, Station};
 use streamproxy::proxy::{self, ProxyInfo, TitleEvent};
+use streamproxy::resolve::{Resolved, Resolver};
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
@@ -15,27 +19,44 @@ use tauri_plugin_window_state::StateFlags;
 
 const USER_AGENT: &str = concat!("SysRadio/", env!("CARGO_PKG_VERSION"));
 const TRAY_ID: &str = "main";
-/// Passed by the autostart entry: start in the tray without showing the window.
+const MAIN: &str = "main";
+const MINI: &str = "mini";
+/// Passed by the autostart entry: start in the tray without showing a window.
 const MINIMIZED_ARG: &str = "--minimized";
 /// Windows limits tray tooltips to 127 characters.
 const TOOLTIP_MAX: usize = 120;
+/// If the frontend never reports ready (broken build), show the window anyway.
+const SHOW_FALLBACK: Duration = Duration::from_secs(4);
 
 struct AppState {
     directory: Directory,
+    resolver: Resolver,
     proxy: ProxyInfo,
     close_to_tray: AtomicBool,
+    mini_mode: AtomicBool,
+    ui_shown: AtomicBool,
+    started_hidden: bool,
 }
 
+impl AppState {
+    fn current_label(&self) -> &'static str {
+        if self.mini_mode.load(Ordering::Relaxed) {
+            MINI
+        } else {
+            MAIN
+        }
+    }
+}
+
+type AppStateRef<'a> = State<'a, Arc<AppState>>;
+
 #[tauri::command]
-fn proxy_info(state: State<'_, Arc<AppState>>) -> ProxyInfo {
+fn proxy_info(state: AppStateRef<'_>) -> ProxyInfo {
     state.proxy.clone()
 }
 
 #[tauri::command]
-async fn search_stations(
-    state: State<'_, Arc<AppState>>,
-    search: Search,
-) -> Result<Vec<Station>, String> {
+async fn search_stations(state: AppStateRef<'_>, search: Search) -> Result<Vec<Station>, String> {
     state
         .directory
         .search(&search)
@@ -44,10 +65,7 @@ async fn search_stations(
 }
 
 #[tauri::command]
-async fn stations_by_id(
-    state: State<'_, Arc<AppState>>,
-    ids: Vec<String>,
-) -> Result<Vec<Station>, String> {
+async fn stations_by_id(state: AppStateRef<'_>, ids: Vec<String>) -> Result<Vec<Station>, String> {
     state
         .directory
         .by_ids(&ids)
@@ -56,7 +74,27 @@ async fn stations_by_id(
 }
 
 #[tauri::command]
-fn count_click(state: State<'_, Arc<AppState>>, id: String) {
+async fn directory_countries(state: AppStateRef<'_>) -> Result<Vec<Facet>, String> {
+    state.directory.countries().await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn directory_languages(state: AppStateRef<'_>) -> Result<Vec<Facet>, String> {
+    state.directory.languages().await.map_err(|e| e.to_string())
+}
+
+/// Checks a stream address the user entered. Errors are codes (`invalid_url`, …).
+#[tauri::command]
+async fn resolve_stream(state: AppStateRef<'_>, url: String) -> Result<Resolved, String> {
+    state
+        .resolver
+        .resolve(&url)
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn count_click(state: AppStateRef<'_>, id: String) {
     let state = state.inner().clone();
     tauri::async_runtime::spawn(async move { state.directory.click(&id).await });
 }
@@ -68,8 +106,42 @@ fn audio_started() {
 }
 
 #[tauri::command]
-fn set_close_to_tray(state: State<'_, Arc<AppState>>, enabled: bool) {
+fn set_close_to_tray(state: AppStateRef<'_>, enabled: bool) {
     state.close_to_tray.store(enabled, Ordering::Relaxed);
+}
+
+/// The frontend is ready: show the window of the stored mode (unless started into the tray).
+#[tauri::command]
+fn show_ui(app: AppHandle, state: AppStateRef<'_>, mini: bool) {
+    state.mini_mode.store(mini, Ordering::Relaxed);
+    if state.ui_shown.swap(true, Ordering::Relaxed) || state.started_hidden {
+        return;
+    }
+    show_window(&app);
+}
+
+/// Switches between the main window and the floating player.
+#[tauri::command]
+fn set_mini_mode(app: AppHandle, state: AppStateRef<'_>, enabled: bool) {
+    state.mini_mode.store(enabled, Ordering::Relaxed);
+    let (show, hide) = if enabled { (MINI, MAIN) } else { (MAIN, MINI) };
+    if let Some(window) = app.get_webview_window(hide) {
+        let _ = window.hide();
+    }
+    show_window_by_label(&app, show);
+}
+
+/// Hides the floating player to the tray (its close button).
+#[tauri::command]
+fn hide_window(app: AppHandle, state: AppStateRef<'_>) {
+    if let Some(window) = app.get_webview_window(state.current_label()) {
+        let _ = window.hide();
+    }
+}
+
+#[tauri::command]
+fn show_current_window(app: AppHandle) {
+    show_window(&app);
 }
 
 /// Tray texts come from the frontend, which owns the translations.
@@ -78,6 +150,7 @@ fn set_close_to_tray(state: State<'_, Arc<AppState>>, enabled: bool) {
 struct TrayState {
     tooltip: String,
     playing: bool,
+    mini: bool,
     favorites: Vec<TrayFavorite>,
     labels: TrayLabels,
 }
@@ -89,10 +162,13 @@ struct TrayFavorite {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct TrayLabels {
     play: String,
     stop: String,
     favorites: String,
+    mini_on: String,
+    mini_off: String,
     show: String,
     quit: String,
 }
@@ -131,39 +207,62 @@ fn tray_menu(app: &AppHandle, tray: &TrayState) -> tauri::Result<Menu<tauri::Wry
             None::<&str>,
         )?)?;
     }
+    let mini_label = if tray.mini {
+        &tray.labels.mini_off
+    } else {
+        &tray.labels.mini_on
+    };
+    let mini = MenuItem::with_id(app, "mini", mini_label, true, None::<&str>)?;
     let show = MenuItem::with_id(app, "show", &tray.labels.show, true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", &tray.labels.quit, true, None::<&str>)?;
     let sep = || PredefinedMenuItem::separator(app);
-    Menu::with_items(app, &[&toggle, &sep()?, &favorites, &sep()?, &show, &quit])
+    Menu::with_items(
+        app,
+        &[&toggle, &sep()?, &favorites, &sep()?, &mini, &show, &quit],
+    )
 }
 
-fn show_window(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
+fn show_window_by_label(app: &AppHandle, label: &str) {
+    if let Some(window) = app.get_webview_window(label) {
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
     }
 }
 
+/// Shows the window of the current mode (main window or floating player).
+fn show_window(app: &AppHandle) {
+    let label = app.state::<Arc<AppState>>().current_label();
+    show_window_by_label(app, label);
+}
+
 fn toggle_window(app: &AppHandle) {
-    if let Some(window) = app.get_webview_window("main") {
+    let label = app.state::<Arc<AppState>>().current_label();
+    if let Some(window) = app.get_webview_window(label) {
         if window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false) {
             let _ = window.hide();
         } else {
-            show_window(app);
+            show_window_by_label(app, label);
         }
     }
+}
+
+fn emit_action(app: &AppHandle, payload: serde_json::Value) {
+    let _ = app.emit_to(MAIN, "tray-action", payload);
 }
 
 fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let initial = TrayState {
         tooltip: "SysRadio".into(),
         playing: false,
+        mini: false,
         favorites: Vec::new(),
         labels: TrayLabels {
             play: "Play".into(),
             stop: "Stop".into(),
-            favorites: "Favourites".into(),
+            favorites: "Favorites".into(),
+            mini_on: "Floating player".into(),
+            mini_off: "Full window".into(),
             show: "Show window".into(),
             quit: "Quit".into(),
         },
@@ -174,17 +273,13 @@ fn build_tray(app: &AppHandle) -> tauri::Result<()> {
         // Windows convention: left click opens the window, right click the menu.
         .show_menu_on_left_click(cfg!(target_os = "macos"))
         .on_menu_event(|app, event| match event.id().as_ref() {
-            "toggle" => {
-                let _ = app.emit("tray-action", serde_json::json!({ "action": "toggle" }));
-            }
+            "toggle" => emit_action(app, serde_json::json!({ "action": "toggle" })),
+            "mini" => emit_action(app, serde_json::json!({ "action": "mini" })),
             "show" => show_window(app),
             "quit" => app.exit(0),
             id => {
                 if let Some(station) = id.strip_prefix("fav:") {
-                    let _ = app.emit(
-                        "tray-action",
-                        serde_json::json!({ "action": "play", "id": station }),
-                    );
+                    emit_action(app, serde_json::json!({ "action": "play", "id": station }));
                 }
             }
         })
@@ -220,6 +315,7 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec![MINIMIZED_ARG]),
         ))
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::default().build())
         .plugin(
             tauri_plugin_window_state::Builder::default()
@@ -235,21 +331,35 @@ pub fn run() {
             let proxy = tauri::async_runtime::block_on(proxy::start(USER_AGENT, sink))?;
             app.manage(Arc::new(AppState {
                 directory: Directory::new(USER_AGENT),
+                resolver: Resolver::new(USER_AGENT),
                 proxy,
                 close_to_tray: AtomicBool::new(true),
+                mini_mode: AtomicBool::new(false),
+                ui_shown: AtomicBool::new(false),
+                started_hidden,
             }));
             build_tray(app.handle())?;
             if !started_hidden {
-                show_window(app.handle());
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(SHOW_FALLBACK).await;
+                    let state = handle.state::<Arc<AppState>>();
+                    if !state.ui_shown.swap(true, Ordering::Relaxed) {
+                        show_window(&handle);
+                    }
+                });
             }
             Ok(())
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let state = window.state::<Arc<AppState>>();
-                if state.close_to_tray.load(Ordering::Relaxed) {
+                // The floating player always goes to the tray (Alt+F4 included).
+                if window.label() == MINI || state.close_to_tray.load(Ordering::Relaxed) {
                     api.prevent_close();
                     let _ = window.hide();
+                } else {
+                    window.app_handle().exit(0);
                 }
             }
         })
@@ -257,9 +367,16 @@ pub fn run() {
             proxy_info,
             search_stations,
             stations_by_id,
+            directory_countries,
+            directory_languages,
+            resolve_stream,
             count_click,
             audio_started,
             set_close_to_tray,
+            show_ui,
+            set_mini_mode,
+            hide_window,
+            show_current_window,
             update_tray
         ])
         .run(tauri::generate_context!())

@@ -5,6 +5,9 @@ import { createPlatform } from './lib/platform';
 import './styles/app.css';
 
 const platform = await createPlatform();
-const app = new AppState(platform, new Audio());
+const audio = new Audio();
+// CORS mode, so the equalizer (Web Audio) may process the stream; the proxy allows the app.
+audio.crossOrigin = 'anonymous';
+const app = new AppState(platform, audio);
 mount(App, { target: document.getElementById('app')!, props: { app } });
 await app.init();

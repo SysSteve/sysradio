@@ -14,12 +14,30 @@
       {
         "label": "main",
         "title": "SysRadio",
-        "width": 380,
-        "height": 600,
+        "url": "index.html",
+        "width": 400,
+        "height": 640,
         "minWidth": 320,
         "minHeight": 420,
         "visible": false,
-        "center": true
+        "center": true,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
+      },
+      {
+        "label": "mini",
+        "title": "SysRadio Mini",
+        "url": "mini.html",
+        "width": 380,
+        "height": 104,
+        "minWidth": 200,
+        "minHeight": 64,
+        "visible": false,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "skipTaskbar": true,
+        "resizable": true,
+        "shadow": true,
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
       }
     ],
     "security": {
@@ -29,7 +47,8 @@
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' data: http://127.0.0.1:*",
         "media-src": "'self' blob: http://127.0.0.1:*",
-        "connect-src": "ipc: http://ipc.localhost"
+        "connect-src": "ipc: http://ipc.localhost http://127.0.0.1:*",
+        "worker-src": "'self' blob:"
       }
     }
   },
@@ -37,8 +56,8 @@
     "active": true,
     "targets": ["nsis", "dmg", "app"],
     "category": "Music",
-    "shortDescription": "Small internet radio player",
-    "longDescription": "SysRadio plays internet radio stations from the free radio-browser.info directory: favourites, search, tray, media keys and now-playing titles.",
+    "shortDescription": "Internet radio player",
+    "longDescription": "SysRadio plays internet radio from the free radio-browser.info directory: favorites, search by country, region, language and genre, your own stream URLs, equalizer, floating player, tray, media keys and now-playing titles.",
     "copyright": "© 2026 SysSteve",
     "icon": [
       "icons/32x32.png",
@@ -49,8 +68,9 @@
     ],
     "windows": {
       "nsis": {
+        "template": "windows/installer.nsi",
         "installMode": "currentUser",
-        "languages": ["German", "English"],
+        "languages": ["German", "English", "Spanish", "French"],
         "displayLanguageSelector": false
       }
     },

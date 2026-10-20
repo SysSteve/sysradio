@@ -10,6 +10,7 @@ export function render(tokens) {
     ...vars(tokens.radius, 'radius-'),
     ...vars(tokens.space, 'space-'),
     ...vars(tokens.font, 'font-'),
+    ...vars(tokens.shadow ?? {}, 'shadow-'),
   ];
   return [
     '/* Generated from brand/tokens.json by scripts/tokens.mjs. Do not edit. */',

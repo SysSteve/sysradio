@@ -1,4 +1,4 @@
-import type { Station } from './types';
+import type { Facet, Station } from './types';
 
 /** Fictional stations for the browser variant (development, tests, screenshots). */
 function station(
@@ -7,6 +7,7 @@ function station(
   countryCode: string,
   tags: string[],
   bitrate = 128,
+  language = '',
 ): Station {
   return {
     id,
@@ -17,7 +18,7 @@ function station(
     tags,
     country: countryCode,
     countryCode,
-    language: '',
+    language,
     codec: 'MP3',
     bitrate,
   };
@@ -35,4 +36,21 @@ export const sampleStations: Station[] = [
     'house',
   ]),
   station('s8', 'Chillout Platzhalter', 'CH', ['chillout', 'lounge']),
+  station('s9', 'Radio Ejemplo Quito', 'EC', ['latin', 'salsa'], 128, 'spanish'),
+  station('s10', 'Estéreo Muestra Bogotá', 'CO', ['latin', 'vallenato'], 96, 'spanish'),
 ];
+
+/** Countries and languages for the filter lists of the browser variant. */
+export const sampleFacets: { countries: Facet[]; languages: Facet[] } = {
+  countries: [
+    { value: 'DE', code: 'DE', name: 'Germany', count: 6275 },
+    { value: 'AT', code: 'AT', name: 'Austria', count: 610 },
+    { value: 'CH', code: 'CH', name: 'Switzerland', count: 540 },
+    { value: 'EC', code: 'EC', name: 'Ecuador', count: 320 },
+    { value: 'CO', code: 'CO', name: 'Colombia', count: 800 },
+  ],
+  languages: [
+    { value: 'german', code: 'de', name: 'german', count: 4411 },
+    { value: 'spanish', code: 'es', name: 'spanish', count: 5350 },
+  ],
+};

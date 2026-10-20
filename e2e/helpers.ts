@@ -7,7 +7,7 @@ export async function open(page: Page, favorites: string[] = []) {
     sessionStorage.setItem('seeded', '1');
     localStorage.clear();
     if (ids.length === 0) return;
-    const all = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8'];
+    const all = ['s1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 's10'];
     // Minimal records; the app refreshes favourites from the (sample) directory on start.
     const favorites = ids
       .filter((id) => all.includes(id))

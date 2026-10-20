@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { Player, RETRY_DELAYS_MS, type AudioLike } from './player.svelte';
+import { Player, RETRY_DELAYS_MS, type AudioLike, type StreamSource } from './player.svelte';
 import { sampleStations } from './samples';
 
 class FakeAudio extends EventTarget implements AudioLike {
@@ -26,10 +26,23 @@ const other = sampleStations[1]!;
 describe('Player', () => {
   let audio: FakeAudio;
   let player: Player;
+  let hlsFatal: (() => void) | null;
+  let hlsDetached: number;
   beforeEach(() => {
     vi.useFakeTimers();
     audio = new FakeAudio();
-    player = new Player((url, session) => `proxy?u=${url}&s=${session}`, audio);
+    hlsFatal = null;
+    hlsDetached = 0;
+    const source: StreamSource = {
+      streamUrl: (url, session) => `proxy?u=${url}&s=${session}`,
+      hlsUrl: (url) => `hls?u=${url}`,
+      attachHls: async (el, url, onFatal) => {
+        el.src = `mse:${url}`;
+        hlsFatal = onFatal;
+        return () => hlsDetached++;
+      },
+    };
+    player = new Player(source, audio);
   });
   afterEach(() => vi.useRealTimers());
 
@@ -100,6 +113,19 @@ describe('Player', () => {
     vi.advanceTimersByTime(60_000);
     expect(audio.plays).toBe(1);
     expect(player.status).toBe('idle');
+  });
+
+  it('plays HLS through the loader and reconnects when it fails', async () => {
+    player.play({ ...station, hls: true });
+    await vi.waitFor(() => expect(audio.src).toBe(`mse:hls?u=${station.url}`));
+    expect(audio.plays).toBe(1);
+    hlsFatal!();
+    expect(player.status).toBe('reconnecting');
+    vi.advanceTimersByTime(RETRY_DELAYS_MS[0]!);
+    expect(hlsDetached).toBe(1);
+    player.stop();
+    // The loader of the replaced connection is released as soon as it finishes attaching.
+    await vi.waitFor(() => expect(hlsDetached).toBe(2));
   });
 
   it('clamps volume and unmutes when turned up', () => {

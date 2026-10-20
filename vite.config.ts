@@ -7,6 +7,11 @@ export default defineConfig({
   plugins: [svelte()],
   clearScreen: false,
   server: { port: 1420, strictPort: true },
-  build: { target: 'es2022', outDir: 'dist' },
+  build: {
+    target: 'es2022',
+    outDir: 'dist',
+    // Two windows: the main window and the floating player.
+    rollupOptions: { input: { main: 'index.html', mini: 'mini.html' } },
+  },
   test: { environment: 'jsdom', include: ['src/**/*.test.ts'] },
 });

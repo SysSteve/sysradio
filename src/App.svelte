@@ -1,10 +1,15 @@
 <script lang="ts">
-  import Heart from '@lucide/svelte/icons/star';
   import History from '@lucide/svelte/icons/history';
   import Search from '@lucide/svelte/icons/search';
   import Settings from '@lucide/svelte/icons/settings';
+  import SlidersVertical from '@lucide/svelte/icons/sliders-vertical';
+  import Star from '@lucide/svelte/icons/star';
   import type { Component } from 'svelte';
   import type { AppState, Tab } from './lib/app.svelte';
+  import { actionFor } from './lib/keybindings';
+  import { toLevels } from './lib/spectrum';
+  import type { PlayerSnapshot, ShortcutAction } from './lib/types';
+  import EqualizerView from './components/EqualizerView.svelte';
   import FavoritesView from './components/FavoritesView.svelte';
   import Notice from './components/Notice.svelte';
   import PlayerBar from './components/PlayerBar.svelte';
@@ -16,15 +21,16 @@
   const t = $derived(app.t);
   const player = $derived(app.player);
 
-  /** Settings is a gear only: its long name would not fit next to the others. */
+  /** Equalizer and settings are icons only: their names would not fit next to the others. */
   const tabs: {
     id: Tab;
     icon: Component<{ size?: number; 'aria-hidden'?: 'true' }>;
     iconOnly?: boolean;
   }[] = [
-    { id: 'favorites', icon: Heart },
+    { id: 'favorites', icon: Star },
     { id: 'search', icon: Search },
     { id: 'recent', icon: History },
+    { id: 'eq', icon: SlidersVertical, iconOnly: true },
     { id: 'settings', icon: Settings, iconOnly: true },
   ];
   const tabButtons: Record<string, HTMLButtonElement> = {};
@@ -42,7 +48,7 @@
     app.save();
   });
 
-  // Tray: tooltip, play/stop entry and the favourites menu.
+  // Tray: tooltip, play/stop entry, floating player and the favourites menu.
   $effect(() => {
     const station = player.station;
     const tooltip = !station
@@ -54,11 +60,14 @@
       .updateTray({
         tooltip,
         playing: player.active,
+        mini: app.settings.mini,
         favorites: app.library.favorites.map((s) => ({ id: s.id, name: s.name })),
         labels: {
           play: t('player.play'),
           stop: t('player.stop'),
           favorites: t('tabs.favorites'),
+          miniOn: t('player.miniOn'),
+          miniOff: t('tray.miniOff'),
           show: t('tray.show'),
           quit: t('tray.quit'),
         },
@@ -66,17 +75,58 @@
       .catch(() => {});
   });
 
-  // Events from the tray and "now playing" from the stream proxy.
+  // Events from the tray, the floating player and "now playing" from the stream proxy.
   $effect(() => {
-    const offTray = app.platform.onTrayAction((action) => {
-      if (action.action === 'toggle') player.toggle();
-      else app.playFavorite(action.id);
-    });
-    const offTitle = app.platform.onNowPlaying((e) => player.nowPlaying(e.session, e.title));
-    return () => {
-      void offTray.then((off) => off());
-      void offTitle.then((off) => off());
+    const offs = [
+      app.platform.onTrayAction((action) => {
+        if (action.action === 'play') app.playFavorite(action.id);
+        else app.run(action.action);
+      }),
+      app.platform.onNowPlaying((e) => player.nowPlaying(e.session, e.title)),
+      app.platform.onCommand((command) => {
+        if (command.type === 'hello') sendSnapshot();
+        else if (command.type === 'setVolume') app.setVolume(command.volume);
+        else if (command.type === 'favorite') {
+          if (player.station) app.toggleFavorite(player.station);
+        } else app.run(command.type as ShortcutAction);
+      }),
+    ];
+    return () => offs.forEach((off) => void off.then((fn) => fn()));
+  });
+
+  // The floating player mirrors this window's player.
+  function snapshot(): PlayerSnapshot {
+    const station = player.station;
+    return {
+      station: station ? { name: station.name, logo: app.platform.logoUrl(station.favicon) } : null,
+      status: player.status,
+      title: player.title,
+      volume: player.volume,
+      muted: player.muted,
+      favorite: station ? app.isFavorite(station.id) : false,
+      hasFavorites: app.library.favorites.length > 0,
+      locale: app.locale,
+      visualizer: app.settings.visualizer,
+      shortcuts: $state.snapshot(app.settings.shortcuts),
     };
+  }
+  function sendSnapshot() {
+    app.platform.sendSnapshot(snapshot());
+  }
+  $effect(() => {
+    snapshot();
+    sendSnapshot();
+  });
+
+  // Spectrum for the floating player, only while it is shown and something plays.
+  $effect(() => {
+    if (!app.settings.mini || !app.settings.visualizer || player.status !== 'playing') return;
+    const buffer = new Uint8Array(128);
+    const timer = setInterval(() => {
+      if (app.graph.spectrum(buffer))
+        app.platform.sendSpectrum(toLevels(buffer, 24, app.graph.sampleRate));
+    }, 50);
+    return () => clearInterval(timer);
   });
 
   // Media keys and the system's media overlay (Windows, macOS) via the Media Session API.
@@ -113,24 +163,11 @@
     });
   });
 
-  function isTyping(target: EventTarget | null) {
-    const el = target as HTMLElement | null;
-    return !!el?.closest('input, select, textarea, button, a, [contenteditable]');
-  }
-
   function onKeydown(e: KeyboardEvent) {
-    if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
-    const key = e.key;
-    if ((key === ' ' || key.toLowerCase() === 'k') && !isTyping(e.target)) {
-      e.preventDefault();
-      player.toggle();
-    } else if (key.toLowerCase() === 'm' && !isTyping(e.target)) {
-      app.setMuted(!player.muted);
-    } else if ((key === '+' || key === '=') && !isTyping(e.target)) {
-      app.setVolume(player.volume + 0.05);
-    } else if (key === '-' && !isTyping(e.target)) {
-      app.setVolume(player.volume - 0.05);
-    }
+    const action = actionFor(e, app.settings.shortcuts);
+    if (!action) return;
+    e.preventDefault();
+    app.run(action);
   }
 
   /** Tabs pattern: arrow keys, Home and End move between tabs. */
@@ -194,11 +231,15 @@
         <SearchView {app} />
       {:else if app.tab === 'recent'}
         <RecentView {app} />
+      {:else if app.tab === 'eq'}
+        <EqualizerView {app} />
       {:else}
         <SettingsView {app} />
       {/if}
     </div>
   </main>
+
+  <p class="visually-hidden" role="status">{app.announcement}</p>
 </div>
 
 <style>
@@ -210,13 +251,14 @@
 
   .tabs {
     display: flex;
-    gap: var(--space-1);
+    gap: 2px;
     padding: var(--space-2) var(--space-2) 0;
     background: var(--surface);
     border-bottom: 1px solid var(--border);
   }
 
   .tab {
+    position: relative;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -236,7 +278,7 @@
 
   .tab.icon-only {
     flex: none;
-    width: 48px;
+    width: 44px;
   }
 
   .tab:hover {
@@ -265,20 +307,13 @@
   }
 
   /* Narrow window: icons only, the name stays available to screen readers. */
-  @media (max-width: 359px) {
+  @media (max-width: 379px) {
     .tab-label {
       position: absolute;
       width: 1px;
       height: 1px;
       overflow: hidden;
       clip: rect(0 0 0 0);
-    }
-  }
-
-  @media (max-height: 170px) {
-    .tabs,
-    main {
-      display: none;
     }
   }
 </style>

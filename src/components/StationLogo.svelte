@@ -1,15 +1,20 @@
 <script lang="ts">
   import RadioIcon from '@lucide/svelte/icons/radio';
-  import type { Station } from '../lib/types';
 
   let {
-    station,
+    favicon,
     logoUrl,
     size = 40,
-  }: { station: Station | null; logoUrl: (favicon: string) => string; size?: number } = $props();
+    tone = 'default',
+  }: {
+    favicon: string | null | undefined;
+    logoUrl: (favicon: string) => string;
+    size?: number;
+    tone?: 'default' | 'hero';
+  } = $props();
 
   let failed = $state(false);
-  const src = $derived(station ? logoUrl(station.favicon) : '');
+  const src = $derived(favicon ? logoUrl(favicon) : '');
   $effect(() => {
     // A new station gets a fresh chance to show its logo.
     void src;
@@ -18,7 +23,7 @@
 </script>
 
 <!-- Decorative: the station name is always written next to the logo. -->
-<span class="logo" style:--size="{size}px" aria-hidden="true">
+<span class="logo {tone}" style:--size="{size}px" aria-hidden="true">
   {#if src && !failed}
     <img {src} alt="" width={size} height={size} loading="lazy" onerror={() => (failed = true)} />
   {:else}
@@ -37,6 +42,13 @@
     border-radius: var(--radius-md);
     background: var(--brand-soft);
     color: var(--brand);
+  }
+
+  .logo.hero {
+    border-radius: var(--radius-lg);
+    background: rgb(255 255 255 / 0.14);
+    color: var(--on-hero);
+    outline: 1px solid rgb(255 255 255 / 0.18);
   }
 
   img {

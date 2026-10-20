@@ -4,7 +4,9 @@ import {
   addFavorite,
   defaultSettings,
   emptyLibrary,
+  customStation,
   moveFavorite,
+  moveFavoriteTo,
   neighbourFavorite,
   pushRecent,
   refreshStations,
@@ -42,6 +44,45 @@ describe('favourites', () => {
     expect(moveFavorite(list, c.id, 1)).toBe(list);
   });
 
+  it('drops a favourite at any position', () => {
+    const list = lib(a, b, c);
+    expect(moveFavoriteTo(list, a.id, 2).favorites.map((s) => s.id)).toEqual([b.id, c.id, a.id]);
+    expect(moveFavoriteTo(list, c.id, -5).favorites.map((s) => s.id)).toEqual([c.id, a.id, b.id]);
+    expect(moveFavoriteTo(list, b.id, 1)).toBe(list);
+  });
+
+  it('builds own stations from a checked address', () => {
+    const own = customStation(
+      { name: '  ', favicon: '' },
+      {
+        url: 'https://stream.example/live',
+        hls: false,
+        name: 'Test FM',
+        codec: 'MP3',
+        bitrate: 128,
+      },
+      'custom:1',
+    );
+    expect(own).toMatchObject({
+      id: 'custom:1',
+      name: 'Test FM',
+      codec: 'MP3',
+      bitrate: 128,
+      hls: false,
+    });
+    const hls = customStation(
+      { name: 'Mein Sender', favicon: 'https://x/logo.png' },
+      { url: 'https://cdn.example/a.m3u8', hls: true, name: '', codec: '', bitrate: 0 },
+      'custom:2',
+    );
+    expect(hls).toMatchObject({
+      name: 'Mein Sender',
+      codec: 'HLS',
+      hls: true,
+      favicon: 'https://x/logo.png',
+    });
+  });
+
   it('cycles through favourites for the media keys', () => {
     const list = lib(a, b, c);
     expect(neighbourFavorite(list, c.id, 1)?.id).toBe(a.id);
@@ -69,11 +110,12 @@ describe('history', () => {
 describe('restoring stored data', () => {
   it('falls back to defaults for damaged settings', () => {
     expect(restoreSettings(null)).toEqual(defaultSettings);
-    expect(restoreSettings({ volume: 7, language: 'xx', muted: 'yes', compact: true })).toEqual({
+    expect(restoreSettings({ volume: 7, language: 'xx', muted: 'yes', mini: true })).toEqual({
       ...defaultSettings,
       volume: 1,
-      compact: true,
+      mini: true,
     });
+    expect(restoreSettings({ language: 'fr' }).language).toBe('fr');
   });
 
   it('keeps only valid, unique stations', () => {

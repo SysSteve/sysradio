@@ -14,6 +14,9 @@ const FALLBACK_SERVERS: [&str; 3] = [
     "de2.api.radio-browser.info",
 ];
 
+/// Sort orders the search offers; anything else falls back to popularity.
+const ORDERS: [&str; 5] = ["clickcount", "votes", "clicktrend", "bitrate", "name"];
+
 /// A station as the app uses it (camelCase towards the frontend).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -29,6 +32,9 @@ pub struct Station {
     pub language: String,
     pub codec: String,
     pub bitrate: u32,
+    /// HTTP Live Streaming (`.m3u8` playlist instead of one continuous stream).
+    #[serde(default)]
+    pub hls: bool,
 }
 
 /// The raw station record of the API (only the fields we need).
@@ -58,20 +64,35 @@ struct ApiStation {
     bitrate: u32,
     #[serde(default)]
     hls: u8,
+    #[serde(default)]
+    clickcount: i64,
+    #[serde(default)]
+    votes: i64,
+    #[serde(default)]
+    clicktrend: i64,
 }
 
 impl ApiStation {
-    /// HLS streams need playlist handling the player does not have yet; they are left out.
+    /// Sort key for merging results of several countries (higher first).
+    fn rank(&self, order: &str) -> i64 {
+        match order {
+            "votes" => self.votes,
+            "clicktrend" => self.clicktrend,
+            "bitrate" => i64::from(self.bitrate),
+            _ => self.clickcount,
+        }
+    }
+
     fn into_station(self) -> Option<Station> {
         let url = if self.url_resolved.is_empty() {
             self.url
         } else {
             self.url_resolved
         };
-        let playable = url.starts_with("http://") || url.starts_with("https://");
-        if self.hls != 0 || !playable || url.contains(".m3u8") {
+        if !(url.starts_with("http://") || url.starts_with("https://")) {
             return None;
         }
+        let hls = self.hls != 0 || url.to_ascii_lowercase().contains(".m3u8");
         Some(Station {
             id: self.stationuuid,
             name: self.name.trim().to_owned(),
@@ -90,6 +111,7 @@ impl ApiStation {
             language: self.language,
             codec: self.codec,
             bitrate: self.bitrate,
+            hls,
         })
     }
 }
@@ -101,18 +123,25 @@ pub struct Search {
     pub name: String,
     pub tag: String,
     pub country_code: String,
+    /// Several countries at once (a region); overrides `country_code`.
+    pub country_codes: Vec<String>,
+    /// Language name as the directory spells it, e.g. `german`.
+    pub language: String,
+    /// One of [`ORDERS`]; empty or unknown means most popular first.
+    pub order: String,
     pub limit: u32,
     pub offset: u32,
 }
 
 impl Search {
-    /// Path and query for `/json/stations/search`, most popular first.
+    /// Path and query for `/json/stations/search`.
     pub fn path(&self) -> String {
         let mut query = url::form_urlencoded::Serializer::new(String::new());
         for (key, value) in [
             ("name", &self.name),
             ("tag", &self.tag),
             ("countrycode", &self.country_code),
+            ("language", &self.language),
         ] {
             let value = value.trim();
             if !value.is_empty() {
@@ -122,6 +151,14 @@ impl Search {
         if !self.tag.trim().is_empty() {
             query.append_pair("tagExact", "false");
         }
+        if !self.language.trim().is_empty() {
+            query.append_pair("languageExact", "true");
+        }
+        let order = ORDERS
+            .iter()
+            .find(|o| **o == self.order)
+            .copied()
+            .unwrap_or("clickcount");
         let limit = if self.limit == 0 {
             50
         } else {
@@ -131,10 +168,42 @@ impl Search {
             .append_pair("limit", &limit.to_string())
             .append_pair("offset", &self.offset.to_string())
             .append_pair("hidebroken", "true")
-            .append_pair("order", "clickcount")
-            .append_pair("reverse", "true");
+            .append_pair("order", order)
+            // Names A–Z, everything else highest first.
+            .append_pair("reverse", if order == "name" { "false" } else { "true" });
         format!("/json/stations/search?{}", query.finish())
     }
+}
+
+/// A filter value with its station count (countries, languages).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Facet {
+    /// Value for the search (`DE` for countries, `german` for languages).
+    pub value: String,
+    /// ISO code for localised names (`DE`, `de`); may be empty for languages.
+    pub code: String,
+    /// The directory's English name, used when no localised name exists.
+    pub name: String,
+    pub count: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiCountry {
+    name: String,
+    #[serde(default)]
+    iso_3166_1: String,
+    #[serde(default)]
+    stationcount: u32,
+}
+
+#[derive(Debug, Deserialize)]
+struct ApiLanguage {
+    name: String,
+    #[serde(default)]
+    iso_639: Option<String>,
+    #[serde(default)]
+    stationcount: u32,
 }
 
 #[derive(Debug)]
@@ -156,6 +225,8 @@ impl std::error::Error for DirectoryError {}
 pub struct Directory {
     http: reqwest::Client,
     servers: Mutex<Vec<String>>,
+    countries: Mutex<Option<Vec<Facet>>>,
+    languages: Mutex<Option<Vec<Facet>>>,
 }
 
 impl Directory {
@@ -170,15 +241,56 @@ impl Directory {
         Self {
             http,
             servers: Mutex::new(Vec::new()),
+            countries: Mutex::new(None),
+            languages: Mutex::new(None),
         }
     }
 
     pub async fn search(&self, search: &Search) -> Result<Vec<Station>, DirectoryError> {
-        let list: Vec<ApiStation> = self.get(&search.path()).await?;
-        Ok(list
-            .into_iter()
-            .filter_map(ApiStation::into_station)
-            .collect())
+        let codes: Vec<String> = search
+            .country_codes
+            .iter()
+            .map(|c| c.trim().to_uppercase())
+            .filter(|c| c.len() == 2)
+            .collect();
+        if codes.len() < 2 {
+            let mut single = search.clone();
+            if let Some(code) = codes.into_iter().next() {
+                single.country_code = code;
+            }
+            let list: Vec<ApiStation> = self.get(&single.path()).await?;
+            return Ok(list
+                .into_iter()
+                .filter_map(ApiStation::into_station)
+                .collect());
+        }
+        // A region: ask every country for enough results to fill the requested page, then
+        // merge them in the requested order. Countries that fail are left out.
+        let limit = if search.limit == 0 {
+            50
+        } else {
+            search.limit.min(200)
+        };
+        let per_country = (search.offset + limit).min(200);
+        let requests = codes.iter().map(|code| {
+            let one = Search {
+                country_code: code.clone(),
+                country_codes: Vec::new(),
+                offset: 0,
+                limit: per_country,
+                ..search.clone()
+            };
+            async move { self.get::<Vec<ApiStation>>(&one.path()).await }
+        });
+        let results = futures_util::future::join_all(requests).await;
+        if results.iter().all(Result::is_err) {
+            return Err(results
+                .into_iter()
+                .find_map(Result::err)
+                .unwrap_or(DirectoryError::Unreachable("no countries".into())));
+        }
+        let lists = results.into_iter().filter_map(Result::ok).collect();
+        Ok(merge(lists, &search.order, search.offset, limit))
     }
 
     /// Current data for known stations (favourites), in the order of `ids`.
@@ -196,6 +308,32 @@ impl Directory {
             .collect();
         stations.sort_by_key(|s| ids.iter().position(|id| *id == s.id));
         Ok(stations)
+    }
+
+    /// Countries with working stations, most stations first. Cached for the session.
+    pub async fn countries(&self) -> Result<Vec<Facet>, DirectoryError> {
+        if let Some(list) = self.countries.lock().unwrap().clone() {
+            return Ok(list);
+        }
+        let list: Vec<ApiCountry> = self
+            .get("/json/countries?hidebroken=true&order=stationcount&reverse=true")
+            .await?;
+        let facets = country_facets(list);
+        *self.countries.lock().unwrap() = Some(facets.clone());
+        Ok(facets)
+    }
+
+    /// Languages with at least a few stations, most stations first. Cached for the session.
+    pub async fn languages(&self) -> Result<Vec<Facet>, DirectoryError> {
+        if let Some(list) = self.languages.lock().unwrap().clone() {
+            return Ok(list);
+        }
+        let list: Vec<ApiLanguage> = self
+            .get("/json/languages?hidebroken=true&order=stationcount&reverse=true")
+            .await?;
+        let facets = language_facets(list);
+        *self.languages.lock().unwrap() = Some(facets.clone());
+        Ok(facets)
     }
 
     /// Tells the directory that a station was played. Failures do not matter.
@@ -278,6 +416,61 @@ impl Directory {
     }
 }
 
+/// Merges per-country results: sorted by `order`, duplicates removed, one page cut out.
+fn merge(lists: Vec<Vec<ApiStation>>, order: &str, offset: u32, limit: u32) -> Vec<Station> {
+    let mut all: Vec<ApiStation> = lists.into_iter().flatten().collect();
+    if order == "name" {
+        all.sort_by_key(|s| s.name.trim().to_lowercase());
+    } else {
+        all.sort_by_key(|s| std::cmp::Reverse(s.rank(order)));
+    }
+    let mut seen = std::collections::HashSet::new();
+    all.into_iter()
+        .filter(|s| seen.insert(s.stationuuid.clone()))
+        .filter_map(ApiStation::into_station)
+        .skip(offset as usize)
+        .take(limit as usize)
+        .collect()
+}
+
+/// Real countries only (two-letter code), merged when the directory lists one twice.
+fn country_facets(list: Vec<ApiCountry>) -> Vec<Facet> {
+    let mut facets: Vec<Facet> = Vec::new();
+    for c in list {
+        let code = c.iso_3166_1.trim().to_uppercase();
+        if code.len() != 2 || !code.chars().all(|ch| ch.is_ascii_alphabetic()) {
+            continue;
+        }
+        match facets.iter_mut().find(|f| f.code == code) {
+            Some(f) => f.count += c.stationcount,
+            None => facets.push(Facet {
+                value: code.clone(),
+                code,
+                name: c.name,
+                count: c.stationcount,
+            }),
+        }
+    }
+    facets.sort_by_key(|f| std::cmp::Reverse(f.count));
+    facets
+}
+
+/// Languages with at least 5 stations; the long tail is mostly typos.
+fn language_facets(list: Vec<ApiLanguage>) -> Vec<Facet> {
+    let mut facets: Vec<Facet> = list
+        .into_iter()
+        .filter(|l| l.stationcount >= 5 && !l.name.trim().is_empty())
+        .map(|l| Facet {
+            value: l.name.trim().to_owned(),
+            code: l.iso_639.unwrap_or_default().trim().to_lowercase(),
+            name: l.name.trim().to_owned(),
+            count: l.stationcount,
+        })
+        .collect();
+    facets.sort_by_key(|f| std::cmp::Reverse(f.count));
+    facets
+}
+
 fn dedupe(mut list: Vec<String>) -> Vec<String> {
     list.sort();
     list.dedup();
@@ -315,7 +508,24 @@ mod tests {
     }
 
     #[test]
-    fn maps_api_records_and_drops_unplayable_ones() {
+    fn search_path_language_and_order() {
+        let search = Search {
+            language: "german".into(),
+            order: "name".into(),
+            ..Default::default()
+        };
+        let path = search.path();
+        assert!(path.contains("language=german&languageExact=true"));
+        assert!(path.ends_with("order=name&reverse=false"));
+        let unknown = Search {
+            order: "drop table".into(),
+            ..Default::default()
+        };
+        assert!(unknown.path().ends_with("order=clickcount&reverse=true"));
+    }
+
+    #[test]
+    fn maps_api_records_and_marks_hls() {
         let json = r#"[
           {"stationuuid":"a","name":" Radio A ","url":"http://a/pls","url_resolved":"http://a/stream",
            "favicon":"https://a/icon.png","tags":"pop, rock,,","countrycode":"de","codec":"MP3","bitrate":128,"hls":0},
@@ -327,14 +537,88 @@ mod tests {
             .into_iter()
             .filter_map(ApiStation::into_station)
             .collect();
-        assert_eq!(stations.len(), 1);
+        assert_eq!(stations.len(), 2);
         let a = &stations[0];
         assert_eq!(
-            (a.name.as_str(), a.url.as_str()),
-            ("Radio A", "http://a/stream")
+            (a.name.as_str(), a.url.as_str(), a.hls),
+            ("Radio A", "http://a/stream", false)
         );
         assert_eq!(a.tags, ["pop", "rock"]);
         assert_eq!(a.country_code, "DE");
         assert_eq!(serde_json::to_value(a).unwrap()["countryCode"], "DE");
+        assert!(stations[1].hls);
+    }
+
+    fn api(id: &str, name: &str, clicks: i64) -> ApiStation {
+        serde_json::from_value(serde_json::json!({
+            "stationuuid": id, "name": name, "url_resolved": format!("https://x/{id}"), "clickcount": clicks
+        }))
+        .unwrap()
+    }
+
+    #[test]
+    fn merges_region_results_by_rank_and_pages() {
+        let ec = vec![api("a", "Radio Quito", 50), api("b", "Ecuador FM", 10)];
+        let co = vec![api("c", "Bogotá Stereo", 30), api("a", "Radio Quito", 50)];
+        let ids = |v: Vec<Station>| v.into_iter().map(|s| s.id).collect::<Vec<_>>();
+        assert_eq!(
+            ids(merge(vec![ec, co], "clickcount", 0, 10)),
+            ["a", "c", "b"]
+        );
+        let ec = vec![api("a", "Radio Quito", 50), api("b", "Ecuador FM", 10)];
+        let co = vec![api("c", "Bogotá Stereo", 30)];
+        assert_eq!(ids(merge(vec![ec, co], "name", 1, 1)), ["b"]);
+    }
+
+    #[test]
+    fn facets_skip_junk_and_merge_duplicates() {
+        let countries = vec![
+            ApiCountry {
+                name: "Germany".into(),
+                iso_3166_1: "DE".into(),
+                stationcount: 10,
+            },
+            ApiCountry {
+                name: "Deutschland".into(),
+                iso_3166_1: "de".into(),
+                stationcount: 5,
+            },
+            ApiCountry {
+                name: "?".into(),
+                iso_3166_1: "".into(),
+                stationcount: 99,
+            },
+            ApiCountry {
+                name: "Austria".into(),
+                iso_3166_1: "AT".into(),
+                stationcount: 20,
+            },
+        ];
+        let facets = country_facets(countries);
+        assert_eq!(
+            facets
+                .iter()
+                .map(|f| (f.code.as_str(), f.count))
+                .collect::<Vec<_>>(),
+            [("AT", 20), ("DE", 15)]
+        );
+        let languages = vec![
+            ApiLanguage {
+                name: "german".into(),
+                iso_639: Some("de".into()),
+                stationcount: 50,
+            },
+            ApiLanguage {
+                name: "typo".into(),
+                iso_639: None,
+                stationcount: 2,
+            },
+        ];
+        let facets = language_facets(languages);
+        assert_eq!(facets.len(), 1);
+        assert_eq!(
+            (facets[0].value.as_str(), facets[0].code.as_str()),
+            ("german", "de")
+        );
     }
 }

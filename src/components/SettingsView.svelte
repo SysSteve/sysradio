@@ -1,6 +1,8 @@
 <script lang="ts">
   import type { AppState } from '../lib/app.svelte';
+  import { languageNames, type Locale } from '../lib/i18n';
   import type { Language } from '../lib/types';
+  import ShortcutEditor from './ShortcutEditor.svelte';
 
   let { app }: { app: AppState } = $props();
   const t = $derived(app.t);
@@ -53,6 +55,12 @@
       set: (v: boolean) => app.setAlwaysOnTop(v),
     },
     {
+      id: 'visualizer',
+      label: t('settings.visualizer'),
+      checked: app.settings.visualizer,
+      set: (v: boolean) => (app.settings.visualizer = v),
+    },
+    {
       id: 'announce',
       label: t('settings.announce'),
       checked: app.settings.announceTitles,
@@ -73,8 +81,9 @@
         onchange={(e) => (app.settings.language = e.currentTarget.value as Language)}
       >
         <option value="auto">{t('settings.languageAuto')}</option>
-        <option value="de" lang="de">Deutsch</option>
-        <option value="en" lang="en">English</option>
+        {#each Object.entries(languageNames) as [code, name] (code)}
+          <option value={code} lang={code as Locale}>{name}</option>
+        {/each}
       </select>
     </div>
     <ul class="toggles">
@@ -94,18 +103,7 @@
     </ul>
   </section>
 
-  <section aria-labelledby="settings-keys">
-    <h2 id="settings-keys">{t('settings.shortcuts')}</h2>
-    <dl class="keys">
-      <dt><kbd>{t('settings.keySpace')}</kbd> / <kbd>K</kbd></dt>
-      <dd>{t('settings.keyPlay')}</dd>
-      <dt><kbd>M</kbd></dt>
-      <dd>{t('settings.keyMute')}</dd>
-      <dt><kbd>+</kbd> / <kbd>−</kbd></dt>
-      <dd>{t('settings.keyVolume')}</dd>
-    </dl>
-    <p class="hint">{t('settings.keyMedia')}</p>
-  </section>
+  <ShortcutEditor {app} />
 
   <section aria-labelledby="settings-about">
     <h2 id="settings-about">{t('settings.about')}</h2>
@@ -158,29 +156,6 @@
     height: 20px;
     margin: 0;
     accent-color: var(--brand);
-  }
-
-  .keys {
-    display: grid;
-    grid-template-columns: auto 1fr;
-    gap: var(--space-2) var(--space-4);
-    margin: 0;
-  }
-
-  dd {
-    margin: 0;
-  }
-
-  kbd {
-    display: inline-block;
-    min-width: 1.6em;
-    padding: 0 6px;
-    border: 1px solid var(--control);
-    border-radius: var(--radius-sm);
-    background: var(--surface);
-    font: inherit;
-    font-size: var(--font-size-sm);
-    text-align: center;
   }
 
   .hint {

@@ -1,50 +1,71 @@
 <script lang="ts">
   import SearchIcon from '@lucide/svelte/icons/search';
+  import SlidersHorizontal from '@lucide/svelte/icons/sliders-horizontal';
   import { untrack } from 'svelte';
   import type { AppState } from '../lib/app.svelte';
+  import { GENRES, QUICK_GENRES, REGIONS, localisedFacets, type RegionId } from '../lib/catalog';
   import type { MessageKey } from '../lib/i18n';
-  import type { Station } from '../lib/types';
+  import type { Facet, SearchOrder, Station } from '../lib/types';
   import StationList from './StationList.svelte';
 
   let { app }: { app: AppState } = $props();
   const t = $derived(app.t);
 
   const PAGE = 40;
-  const COUNTRIES = ['DE', 'AT', 'CH', 'GB', 'US', 'FR', 'IT', 'ES', 'NL'] as const;
-  /** Genre buttons and the directory tag each one searches for. */
-  const GENRES = [
-    ['pop', 'pop'],
-    ['rock', 'rock'],
-    ['news', 'news'],
-    ['jazz', 'jazz'],
-    ['classical', 'classical'],
-    ['electronic', 'electronic'],
-    ['schlager', 'schlager'],
-    ['hiphop', 'hip hop'],
-    ['chillout', 'chillout'],
-  ] as const;
+  const ORDERS: SearchOrder[] = ['clickcount', 'votes', 'clicktrend', 'bitrate', 'name'];
 
-  let name = $state('');
+  let countries = $state<Facet[]>([]);
+  let languages = $state<Facet[]>([]);
   // Starts with the system's country; changing it later is up to the user.
-  const initialCountry = untrack(() => app.country);
-  let country = $state<string>(
-    (COUNTRIES as readonly string[]).includes(initialCountry) ? initialCountry : '',
-  );
+  const initialWhere = untrack(() => app.country);
+  let name = $state('');
+  /** '' = everywhere, 'region:<id>', or a country code. */
+  let where = $state(initialWhere);
+  let language = $state('');
   let tag = $state('');
+  let order = $state<SearchOrder>('clickcount');
   let results = $state<Station[]>([]);
   let status = $state<'loading' | 'done' | 'error'>('loading');
   let hasMore = $state(false);
   let request = 0;
 
+  $effect(() => {
+    app.platform.countries().then(
+      (list) => (countries = list),
+      () => {},
+    );
+    app.platform.languages().then(
+      (list) => (languages = list),
+      () => {},
+    );
+  });
+
+  const number = $derived(new Intl.NumberFormat(app.locale));
+  const countryOptions = $derived(localisedFacets(countries, app.locale, 'region'));
+  const languageOptions = $derived(localisedFacets(languages, app.locale, 'language'));
+  const activeFilters = $derived(
+    [where !== initialWhere, language !== '', tag !== '', order !== 'clickcount'].filter(Boolean)
+      .length,
+  );
+
+  function whereLabel(value: string): string {
+    if (value.startsWith('region:')) return t(`region.${value.slice(7)}` as MessageKey);
+    return countryOptions.find((c) => c.value === value)?.label ?? value;
+  }
+
   async function search(append = false) {
     const id = ++request;
     status = 'loading';
     const offset = append ? results.length : 0;
+    const region = where.startsWith('region:') ? REGIONS[where.slice(7) as RegionId] : null;
     try {
       const found = await app.platform.search({
         name,
         tag,
-        countryCode: country,
+        countryCode: region ? '' : where,
+        countryCodes: region ?? [],
+        language,
+        order,
         limit: PAGE,
         offset,
       });
@@ -59,7 +80,7 @@
     }
   }
 
-  // Typing searches after a short pause; country and genre search right away.
+  // Typing searches after a short pause; filters search right away.
   let typed = $state(false);
   $effect(() => {
     void name;
@@ -68,16 +89,22 @@
     return () => clearTimeout(timer);
   });
   $effect(() => {
-    void country;
-    void tag;
+    void [where, language, tag, order];
     untrack(() => void search());
   });
 
+  function resetFilters() {
+    where = initialWhere;
+    language = '';
+    tag = '';
+    order = 'clickcount';
+  }
+
   const heading = $derived(
-    name.trim() || tag
+    name.trim() || tag || language || order !== 'clickcount'
       ? ''
-      : country
-        ? t('search.popular', t(`country.${country}` as MessageKey))
+      : where
+        ? t('search.popular', whereLabel(where))
         : t('search.popularAll'),
   );
 </script>
@@ -106,33 +133,77 @@
       <SearchIcon size={18} aria-hidden="true" />
     </button>
   </div>
-  <div class="field">
-    <label class="label" for="search-country">{t('search.country')}</label>
-    <select id="search-country" class="select" bind:value={country}>
-      <option value="">{t('search.countryAll')}</option>
-      {#each COUNTRIES as code (code)}
-        <option value={code}>{t(`country.${code}` as MessageKey)}</option>
-      {/each}
-    </select>
-  </div>
-  <div class="field">
-    <span class="label" id="genre-label">{t('search.genre')}</span>
-    <div class="chips" role="group" aria-labelledby="genre-label">
-      <button type="button" class="chip" aria-pressed={tag === ''} onclick={() => (tag = '')}>
-        {t('search.genreAll')}
+
+  <div class="chips" role="group" aria-label={t('search.quickGenres')}>
+    {#each GENRES.slice(0, QUICK_GENRES) as [key, value] (key)}
+      <button
+        type="button"
+        class="chip"
+        aria-pressed={tag === value}
+        onclick={() => (tag = tag === value ? '' : value)}
+      >
+        {t(`genre.${key}` as MessageKey)}
       </button>
-      {#each GENRES as [key, value] (key)}
-        <button
-          type="button"
-          class="chip"
-          aria-pressed={tag === value}
-          onclick={() => (tag = tag === value ? '' : value)}
-        >
-          {t(`genre.${key}` as MessageKey)}
-        </button>
-      {/each}
-    </div>
+    {/each}
   </div>
+
+  <details class="filters">
+    <summary>
+      <SlidersHorizontal size={16} aria-hidden="true" />
+      {activeFilters > 0 ? t('search.filtersActive', activeFilters) : t('search.filters')}
+    </summary>
+    <div class="filter-grid">
+      <div class="field">
+        <label class="label" for="search-where">{t('search.where')}</label>
+        <select id="search-where" class="select" bind:value={where}>
+          <option value="">{t('search.everywhere')}</option>
+          <optgroup label={t('search.regions')}>
+            {#each Object.keys(REGIONS) as region (region)}
+              <option value="region:{region}">{t(`region.${region}` as MessageKey)}</option>
+            {/each}
+          </optgroup>
+          <optgroup label={t('search.countries')}>
+            {#if countryOptions.length === 0 && initialWhere}
+              <option value={initialWhere}>{initialWhere}</option>
+            {/if}
+            {#each countryOptions as country (country.value)}
+              <option value={country.value}>{country.label} ({number.format(country.count)})</option
+              >
+            {/each}
+          </optgroup>
+        </select>
+      </div>
+      <div class="field">
+        <label class="label" for="search-language">{t('search.language')}</label>
+        <select id="search-language" class="select" bind:value={language}>
+          <option value="">{t('search.languageAll')}</option>
+          {#each languageOptions as lang (lang.value)}
+            <option value={lang.value}>{lang.label} ({number.format(lang.count)})</option>
+          {/each}
+        </select>
+      </div>
+      <div class="field">
+        <label class="label" for="search-genre">{t('search.genre')}</label>
+        <select id="search-genre" class="select" bind:value={tag}>
+          <option value="">{t('search.genreAll')}</option>
+          {#each GENRES as [key, value] (key)}
+            <option {value}>{t(`genre.${key}` as MessageKey)}</option>
+          {/each}
+        </select>
+      </div>
+      <div class="field">
+        <label class="label" for="search-order">{t('search.order')}</label>
+        <select id="search-order" class="select" bind:value={order}>
+          {#each ORDERS as value (value)}
+            <option {value}>{t(`order.${value}`)}</option>
+          {/each}
+        </select>
+      </div>
+    </div>
+    {#if activeFilters > 0}
+      <button type="button" class="btn-link" onclick={resetFilters}>{t('search.reset')}</button>
+    {/if}
+  </details>
 </form>
 
 <div class="summary" role="status">
@@ -186,7 +257,7 @@
   }
 
   .chip {
-    min-height: 32px;
+    min-height: 30px;
     padding: 0 var(--space-3);
     border: 1px solid var(--control);
     border-radius: var(--radius-pill);
@@ -194,11 +265,48 @@
     font-size: var(--font-size-sm);
   }
 
+  .chip:hover {
+    background: var(--surface-2);
+  }
+
   .chip[aria-pressed='true'] {
     border-color: var(--brand);
     background: var(--brand);
     color: var(--on-brand);
     font-weight: 600;
+  }
+
+  .filters {
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+  }
+
+  .filters summary {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    min-height: 40px;
+    padding: 0 var(--space-3);
+    font-weight: 600;
+    cursor: pointer;
+    border-radius: var(--radius-md);
+  }
+
+  .filters[open] summary {
+    border-bottom: 1px solid var(--border);
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+  }
+
+  .filter-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 160px), 1fr));
+    gap: var(--space-3);
+    padding: var(--space-3);
+  }
+
+  .filters .btn-link {
+    margin: 0 var(--space-2) var(--space-2);
   }
 
   .summary {

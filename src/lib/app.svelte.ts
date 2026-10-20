@@ -1,38 +1,80 @@
+import { AudioGraph } from './audio-graph';
+import * as eq from './eq';
 import { resolveLocale, systemCountry, translator } from './i18n';
+import {
+  SHORTCUT_ACTIONS,
+  accelerator,
+  assign,
+  bindingParts,
+  conflictOf,
+  defaultShortcuts,
+} from './keybindings';
 import * as lib from './library';
 import { Player, type AudioLike } from './player.svelte';
 import type { Platform } from './platform';
-import type { LibraryData, Settings, Station } from './types';
+import type {
+  KeyBinding,
+  LibraryData,
+  ResolveErrorCode,
+  Settings,
+  ShortcutAction,
+  Station,
+} from './types';
 
-export type Tab = 'favorites' | 'search' | 'recent' | 'settings';
+export type Tab = 'favorites' | 'search' | 'recent' | 'eq' | 'settings';
 
-/** An undoable change, shown as a short notice with an "Undo" button. */
+/** A short notice, optionally with an "Undo" button. */
 export interface Notice {
   text: string;
   undo?: () => void;
 }
 
-/** Application state shared by all components. */
+/** Input of the "add station by address" form. */
+export interface CustomStationInput {
+  url: string;
+  name: string;
+  favicon: string;
+}
+
+const VOLUME_STEP = 0.05;
+
+/** Application state of the main window, shared by all components. */
 export class AppState {
-  settings = $state<Settings>({ ...lib.defaultSettings });
+  settings = $state<Settings>(structuredClone(lib.defaultSettings));
   library = $state<LibraryData>({ ...lib.emptyLibrary });
   tab = $state<Tab>('favorites');
   notice = $state<Notice | null>(null);
   ready = $state(false);
+  /** System-wide shortcuts another program already holds. */
+  globalFailures = $state<ShortcutAction[]>([]);
+  /** Text for screen readers after drag and drop or similar silent changes. */
+  announcement = $state('');
   readonly systemLanguage: string;
   readonly player: Player;
   readonly platform: Platform;
+  readonly graph: AudioGraph;
 
-  constructor(platform: Platform, audio: AudioLike, systemLanguage = navigator.language) {
+  constructor(platform: Platform, audio: HTMLAudioElement, systemLanguage = navigator.language) {
     this.platform = platform;
     this.systemLanguage = systemLanguage;
-    this.player = new Player((url, session) => platform.streamUrl(url, session), audio);
+    this.graph = new AudioGraph(audio);
+    this.player = new Player(
+      {
+        streamUrl: (url, session) => platform.streamUrl(url, session),
+        hlsUrl: (url) => platform.hlsUrl(url),
+        attachHls: (el, url, onFatal) => platform.attachHls(el, url, onFatal),
+      },
+      audio as AudioLike,
+    );
     this.player.onStart = (station) => {
       this.library = lib.pushRecent(this.library, station);
       this.settings.lastStationId = station.id;
-      platform.countClick(station.id);
+      if (!lib.isCustom(station)) platform.countClick(station.id);
     };
-    this.player.onPlaying = () => platform.audioStarted();
+    this.player.onPlaying = () => {
+      platform.audioStarted();
+      void this.graph.ensure().then(() => this.#applyEq());
+    };
   }
 
   get locale() {
@@ -57,10 +99,11 @@ export class AppState {
     this.tab = this.library.favorites.length > 0 ? 'favorites' : 'search';
     this.player.setVolume(this.settings.volume);
     this.player.setMuted(this.settings.muted);
+    this.#applyEq();
     await Promise.allSettled([
       this.platform.setCloseToTray(this.settings.closeToTray),
       this.platform.setAlwaysOnTop(this.settings.alwaysOnTop),
-      this.settings.compact ? this.platform.setCompact(true) : Promise.resolve(),
+      this.registerGlobalShortcuts(),
     ]);
     const last = this.findStation(this.settings.lastStationId);
     if (last) {
@@ -68,12 +111,13 @@ export class AppState {
       else this.player.select(last);
     }
     this.ready = true;
+    await this.platform.showUi(this.settings.mini);
     void this.refreshFavorites();
   }
 
   /** Stream URLs change over time; favourites pick up the directory's current data. */
   async refreshFavorites() {
-    const ids = this.library.favorites.map((s) => s.id);
+    const ids = this.library.favorites.filter((s) => !lib.isCustom(s)).map((s) => s.id);
     if (ids.length === 0) return;
     try {
       const fresh = await this.platform.byIds(ids);
@@ -114,6 +158,18 @@ export class AppState {
 
   moveFavorite(id: string, delta: number) {
     this.library = lib.moveFavorite(this.library, id, delta);
+    this.#announcePosition(id);
+  }
+
+  moveFavoriteTo(id: string, index: number) {
+    this.library = lib.moveFavoriteTo(this.library, id, index);
+    this.#announcePosition(id);
+  }
+
+  #announcePosition(id: string) {
+    const index = this.library.favorites.findIndex((s) => s.id === id);
+    const station = this.library.favorites[index];
+    if (station) this.announcement = this.t('list.moved', station.name, index + 1);
   }
 
   clearRecent() {
@@ -125,6 +181,39 @@ export class AppState {
         this.library = { ...this.library, recent: previous };
       },
     };
+  }
+
+  /** Checks the address and adds (or, with `existing`, updates) an own station. */
+  async saveCustomStation(
+    input: CustomStationInput,
+    existing?: Station,
+  ): Promise<{ ok: true } | { ok: false; error: ResolveErrorCode | 'logo' }> {
+    if (input.favicon.trim() && !/^https?:\/\/\S+$/i.test(input.favicon.trim())) {
+      return { ok: false, error: 'logo' };
+    }
+    let stream;
+    try {
+      stream = await this.platform.resolveStream(input.url);
+    } catch (e) {
+      const code = String(e) as ResolveErrorCode;
+      const known: ResolveErrorCode[] = [
+        'invalid_url',
+        'unreachable',
+        'not_audio',
+        'empty_playlist',
+      ];
+      return { ok: false, error: known.includes(code) ? code : 'unreachable' };
+    }
+    const station = lib.customStation(input, stream, existing?.id);
+    if (existing) {
+      this.library = lib.replaceStation(this.library, station);
+      if (this.player.station?.id === station.id) this.player.select(station);
+      this.notice = { text: this.t('custom.updated', station.name) };
+    } else {
+      this.library = lib.addFavorite(this.library, station);
+      this.notice = { text: this.t('custom.added', station.name) };
+    }
+    return { ok: true };
   }
 
   playNeighbour(delta: 1 | -1) {
@@ -158,9 +247,124 @@ export class AppState {
     await this.platform.setAlwaysOnTop(enabled);
   }
 
-  async setCompact(enabled: boolean) {
-    this.settings.compact = enabled;
-    await this.platform.setCompact(enabled);
+  async setMini(enabled: boolean) {
+    this.settings.mini = enabled;
+    await this.platform.setMiniMode(enabled);
+  }
+
+  /** One entry point for shortcuts, tray, media keys and the floating player. */
+  run(action: ShortcutAction) {
+    switch (action) {
+      case 'toggle':
+        return this.player.toggle();
+      case 'mute':
+        return this.setMuted(!this.player.muted);
+      case 'volumeUp':
+        return this.setVolume(this.player.volume + VOLUME_STEP);
+      case 'volumeDown':
+        return this.setVolume(this.player.volume - VOLUME_STEP);
+      case 'next':
+        return this.playNeighbour(1);
+      case 'previous':
+        return this.playNeighbour(-1);
+      case 'mini':
+        return void this.setMini(!this.settings.mini);
+      case 'show':
+        return void this.platform.showWindow();
+    }
+  }
+
+  // --- Equalizer ---------------------------------------------------------------------------
+
+  #applyEq() {
+    this.graph.setEq(this.settings.eq.enabled, this.settings.eq.gains);
+  }
+
+  #setEq(next: Settings['eq']) {
+    this.settings.eq = next;
+    this.#applyEq();
+  }
+
+  setEqEnabled(enabled: boolean) {
+    this.#setEq({ ...this.settings.eq, enabled });
+  }
+
+  applyEqPreset(id: string) {
+    this.#setEq({ ...eq.applyPreset(this.settings.eq, id), enabled: true });
+  }
+
+  setEqBand(index: number, db: number) {
+    this.#setEq({ ...eq.setBand(this.settings.eq, index, db), enabled: true });
+  }
+
+  resetEq() {
+    this.#setEq({ ...eq.applyPreset(this.settings.eq, 'flat') });
+  }
+
+  saveEqPreset(name: string) {
+    this.#setEq(eq.saveCustom(this.settings.eq, name));
+    this.notice = { text: this.t('eq.saved', name.trim()) };
+  }
+
+  deleteEqPreset(id: string) {
+    const before = this.settings.eq;
+    const preset = before.custom.find((p) => p.id === id);
+    if (!preset) return;
+    this.#setEq(eq.deleteCustom(before, id));
+    this.notice = {
+      text: this.t('eq.deleted', preset.name),
+      undo: () =>
+        this.#setEq({ ...this.settings.eq, custom: before.custom, presetId: before.presetId }),
+    };
+  }
+
+  // --- Shortcuts ---------------------------------------------------------------------------
+
+  keyNames() {
+    const t = this.t;
+    return {
+      ctrl: t('keys.ctrl'),
+      alt: t('keys.alt'),
+      shift: t('keys.shift'),
+      meta: t('keys.meta'),
+      space: t('keys.space'),
+    };
+  }
+
+  /** "Strg+Alt+P" for display. */
+  keysLabel(binding: KeyBinding | null): string {
+    return binding ? bindingParts(binding, this.keyNames(), this.platform.isMac).join('+') : '';
+  }
+
+  /** Assigns a shortcut; returns the action that lost it, if any. */
+  async setShortcut(
+    action: ShortcutAction,
+    scope: 'local' | 'global',
+    binding: KeyBinding | null,
+  ): Promise<ShortcutAction | null> {
+    // Plain copy: the state proxy cannot be cloned.
+    const current = $state.snapshot(this.settings.shortcuts);
+    const other = binding ? conflictOf(current, action, scope, binding) : null;
+    this.settings.shortcuts = assign(current, action, scope, binding);
+    if (scope === 'global') await this.registerGlobalShortcuts();
+    return other;
+  }
+
+  async resetShortcuts() {
+    this.settings.shortcuts = defaultShortcuts();
+    await this.registerGlobalShortcuts();
+    this.notice = { text: this.t('shortcuts.resetDone') };
+  }
+
+  async registerGlobalShortcuts() {
+    const list = SHORTCUT_ACTIONS.flatMap((action) => {
+      const binding = this.settings.shortcuts[action].global;
+      return binding ? [{ id: action, accelerator: accelerator(binding) }] : [];
+    });
+    const failed = await this.platform
+      .setGlobalShortcuts(list, (id) => this.run(id as ShortcutAction))
+      .catch(() => list.map((s) => s.id));
+    this.globalFailures = failed as ShortcutAction[];
   }
 
   save() {

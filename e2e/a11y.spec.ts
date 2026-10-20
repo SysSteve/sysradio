@@ -6,6 +6,13 @@ import { open } from './helpers';
 const VIEWS: { name: string; favorites?: string[]; prepare: (page: Page) => Promise<void> }[] = [
   { name: 'search (first start)', prepare: async () => {} },
   {
+    name: 'search with filters open',
+    prepare: async (page) => {
+      await page.getByText('Filter', { exact: true }).click();
+      await page.getByLabel('Land oder Region').selectOption({ label: 'Lateinamerika' });
+    },
+  },
+  {
     name: 'favourites, playing',
     favorites: ['s1', 's2', 's7'],
     prepare: async (page) => {
@@ -24,6 +31,17 @@ const VIEWS: { name: string; favorites?: string[]; prepare: (page: Page) => Prom
     },
   },
   {
+    name: 'own station dialog with error',
+    favorites: ['s1'],
+    prepare: async (page) => {
+      await page.getByRole('button', { name: 'Sender per Adresse hinzufügen' }).click();
+      await page.getByRole('button', { name: 'Prüfen und speichern' }).click();
+      await expect(
+        page.getByText('Bitte gib eine vollständige Adresse ein', { exact: false }),
+      ).toBeVisible();
+    },
+  },
+  {
     name: 'history',
     favorites: ['s1'],
     prepare: async (page) => {
@@ -32,22 +50,33 @@ const VIEWS: { name: string; favorites?: string[]; prepare: (page: Page) => Prom
     },
   },
   {
-    name: 'settings',
-    prepare: async (page) => page.getByRole('tab', { name: 'Einstellungen' }).click(),
+    name: 'equalizer with name error',
+    prepare: async (page) => {
+      await page.getByRole('tab', { name: 'Equalizer' }).click();
+      await page.getByLabel('Voreinstellung', { exact: true }).selectOption({ label: 'Rock' });
+      await page.getByRole('button', { name: 'Speichern' }).click();
+    },
+  },
+  {
+    name: 'settings, recording a shortcut',
+    prepare: async (page) => {
+      await page.getByRole('tab', { name: 'Einstellungen' }).click();
+      await page.getByRole('button', { name: /^Lauter, Systemweit/ }).click();
+    },
   },
 ];
 
+const AXE_TAGS = ['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'];
+
 test.use({ locale: 'de-DE' });
 
-for (const scheme of ['light', 'dark'] as const)
+for (const scheme of ['light', 'dark'] as const) {
   for (const view of VIEWS)
     test(`accessible: ${view.name} (${scheme})`, async ({ page }) => {
       await page.emulateMedia({ colorScheme: scheme });
       await open(page, view.favorites);
       await view.prepare(page);
-      const results = await new AxeBuilder({ page })
-        .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa'])
-        .analyze();
+      const results = await new AxeBuilder({ page }).withTags(AXE_TAGS).analyze();
       expect(
         results.violations.map((v) => `${v.id}: ${v.nodes.map((n) => n.target).join(' | ')}`),
       ).toEqual([]);
@@ -57,3 +86,27 @@ for (const scheme of ['light', 'dark'] as const)
         320,
       );
     });
+
+  test(`accessible: floating player (${scheme})`, async ({ page, context }) => {
+    await page.emulateMedia({ colorScheme: scheme });
+    await open(page, ['s1']);
+    const mini = await context.newPage();
+    await mini.emulateMedia({ colorScheme: scheme });
+    await mini.goto('/mini.html');
+    await page.getByRole('button', { name: /abspielen$/ }).click();
+    await expect(mini.getByText('Beispiel-Interpret – Beispieltitel')).toBeVisible();
+    for (const size of [
+      { width: 220, height: 72 },
+      { width: 380, height: 104 },
+      { width: 420, height: 200 },
+    ]) {
+      await mini.setViewportSize(size);
+      const results = await new AxeBuilder({ page: mini }).withTags(AXE_TAGS).analyze();
+      expect(
+        results.violations.map(
+          (v) => `${size.width}: ${v.id}: ${v.nodes.map((n) => n.target).join(' | ')}`,
+        ),
+      ).toEqual([]);
+    }
+  });
+}

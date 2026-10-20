@@ -13,6 +13,14 @@ export interface AudioLike extends EventTarget {
   removeAttribute(name: string): void;
 }
 
+/** Where streams come from: plain streams by URL, HLS through a loader (hls.js). */
+export interface StreamSource {
+  streamUrl(url: string, session: string): string;
+  hlsUrl(url: string): string;
+  /** Attaches an HLS playlist to the element; calls `onFatal` when it breaks. Returns detach. */
+  attachHls(audio: AudioLike, playlistUrl: string, onFatal: () => void): Promise<() => void>;
+}
+
 /** Waits before reconnect attempts; after the last one the player gives up. */
 export const RETRY_DELAYS_MS = [1000, 2000, 4000, 8000, 15000];
 
@@ -28,17 +36,18 @@ export class Player {
   muted = $state(false);
 
   #audio: AudioLike;
-  #streamUrl: (url: string, session: string) => string;
+  #source: StreamSource;
   #session = 0;
   #attempt = 0;
   #timer: ReturnType<typeof setTimeout> | undefined;
+  #detachHls: (() => void) | null = null;
   /** Called whenever a station starts (for history and click counting). */
   onStart: (station: Station) => void = () => {};
   /** Called whenever audio actually starts coming out (also after a reconnect). */
   onPlaying: () => void = () => {};
 
-  constructor(streamUrl: (url: string, session: string) => string, audio: AudioLike) {
-    this.#streamUrl = streamUrl;
+  constructor(source: StreamSource, audio: AudioLike) {
+    this.#source = source;
     this.#audio = audio;
     audio.addEventListener('playing', () => {
       if (this.status === 'idle') return;
@@ -76,6 +85,7 @@ export class Player {
 
   stop() {
     clearTimeout(this.#timer);
+    this.#timer = undefined;
     this.#session++;
     this.status = 'idle';
     this.title = '';
@@ -88,7 +98,7 @@ export class Player {
   }
 
   setVolume(volume: number) {
-    this.volume = Math.min(1, Math.max(0, volume));
+    this.volume = Math.min(1, Math.max(0, Math.round(volume * 100) / 100));
     this.#audio.volume = this.volume;
     if (this.volume > 0 && this.muted) this.setMuted(false);
   }
@@ -105,12 +115,29 @@ export class Player {
 
   #connect(status: PlayerStatus) {
     clearTimeout(this.#timer);
+    this.#timer = undefined;
     if (!this.station) return;
+    this.#releaseHls();
     this.#session++;
+    const session = this.#session;
     this.status = status;
-    this.#audio.src = this.#streamUrl(this.station.url, this.session);
     this.#audio.volume = this.volume;
     this.#audio.muted = this.muted;
+    if (this.station.hls) {
+      const fatal = () => {
+        if (session === this.#session) this.#dropped();
+      };
+      void this.#source
+        .attachHls(this.#audio, this.#source.hlsUrl(this.station.url), fatal)
+        .then((detach) => {
+          if (session === this.#session) {
+            this.#detachHls = detach;
+            this.#audio.play().catch(() => {});
+          } else detach();
+        }, fatal);
+      return;
+    }
+    this.#audio.src = this.#source.streamUrl(this.station.url, this.session);
     // Autoplay restrictions do not apply in the app; a failed start shows up as an error event.
     this.#audio.play().catch(() => {});
   }
@@ -133,7 +160,13 @@ export class Player {
     }, delay);
   }
 
+  #releaseHls() {
+    this.#detachHls?.();
+    this.#detachHls = null;
+  }
+
   #detach() {
+    this.#releaseHls();
     this.#audio.pause();
     this.#audio.removeAttribute('src');
     this.#audio.load();

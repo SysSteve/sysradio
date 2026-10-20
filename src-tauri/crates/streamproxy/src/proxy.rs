@@ -4,15 +4,23 @@
 //! - lets us ask for ICY metadata and strip it before the audio reaches the player,
 //! - reports the current title ("now playing") through a callback.
 //!
+//! - plays HLS stations: playlists are rewritten so segments also come through here (`hls`),
+//! - answers with CORS headers for the app itself, so the equalizer (Web Audio) may process it.
+//!
 //! Every request needs the random token of this run, so neither other programs nor web pages
 //! in a browser can use the proxy.
 
+use crate::hls::{is_playlist, rewrite_playlist, ProxyUrl};
 use crate::icy::{stream_title, IcyDemuxer};
 use bytes::Bytes;
 use futures_util::StreamExt;
 use http_body_util::{combinators::BoxBody, BodyExt, Full, StreamBody};
 use hyper::body::Frame;
-use hyper::header::{HeaderValue, CACHE_CONTROL, CONTENT_TYPE};
+use hyper::header::{
+    HeaderValue, ACCESS_CONTROL_ALLOW_HEADERS, ACCESS_CONTROL_ALLOW_METHODS,
+    ACCESS_CONTROL_ALLOW_ORIGIN, CACHE_CONTROL, CONTENT_LENGTH, CONTENT_RANGE, CONTENT_TYPE,
+    ORIGIN, RANGE, VARY,
+};
 use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper::{Method, Request, Response, StatusCode};
@@ -29,6 +37,16 @@ use tokio::sync::mpsc;
 /// Logos larger than this are not proxied.
 const MAX_LOGO_BYTES: usize = 1024 * 1024;
 const LOGO_CACHE_ENTRIES: usize = 300;
+/// HLS playlists larger than this are rejected (real ones are a few KB).
+const MAX_PLAYLIST_BYTES: usize = 512 * 1024;
+
+/// Origins of the SysRadio web view (Windows, macOS/Linux, `pnpm dev`). Only these get CORS.
+const APP_ORIGINS: [&str; 4] = [
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+    "tauri://localhost",
+    "http://localhost:1420",
+];
 
 /// "Now playing" changed for the stream started with `session`.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -49,6 +67,7 @@ pub struct ProxyInfo {
 }
 
 struct Shared {
+    base: String,
     token: String,
     http: reqwest::Client,
     sink: TitleSink,
@@ -91,7 +110,9 @@ pub async fn start(user_agent: &str, sink: TitleSink) -> std::io::Result<ProxyIn
         .read_timeout(Duration::from_secs(20))
         .build()
         .map_err(std::io::Error::other)?;
+    let base = format!("http://127.0.0.1:{port}");
     let shared = Arc::new(Shared {
+        base: base.clone(),
         token: token.clone(),
         http,
         sink,
@@ -119,10 +140,7 @@ pub async fn start(user_agent: &str, sink: TitleSink) -> std::io::Result<ProxyIn
             });
         }
     });
-    Ok(ProxyInfo {
-        base: format!("http://127.0.0.1:{port}"),
-        token,
-    })
+    Ok(ProxyInfo { base, token })
 }
 
 type Body = BoxBody<Bytes, Infallible>;
@@ -137,12 +155,56 @@ fn plain(status: StatusCode, text: &'static str) -> Response<Body> {
     res
 }
 
+impl ProxyUrl for Shared {
+    fn proxied(&self, kind: &str, target: &url::Url) -> String {
+        let query = url::form_urlencoded::Serializer::new(String::new())
+            .append_pair("t", &self.token)
+            .append_pair("u", target.as_str())
+            .finish();
+        format!("{}/{kind}?{query}", self.base)
+    }
+}
+
+/// The request's origin if it is the app itself.
+fn app_origin(req: &Request<hyper::body::Incoming>) -> Option<HeaderValue> {
+    let origin = req.headers().get(ORIGIN)?;
+    APP_ORIGINS
+        .iter()
+        .any(|o| origin.as_bytes() == o.as_bytes())
+        .then(|| origin.clone())
+}
+
 async fn handle(
     shared: Arc<Shared>,
     req: Request<hyper::body::Incoming>,
 ) -> Result<Response<Body>, Infallible> {
+    let cors = app_origin(&req);
+    let mut res = route(&shared, req).await;
+    if let Some(origin) = cors {
+        let headers = res.headers_mut();
+        headers.insert(ACCESS_CONTROL_ALLOW_ORIGIN, origin);
+        headers.insert(VARY, HeaderValue::from_static("Origin"));
+    }
+    Ok(res)
+}
+
+async fn route(shared: &Shared, req: Request<hyper::body::Incoming>) -> Response<Body> {
+    if req.method() == Method::OPTIONS {
+        // CORS preflight (HLS byte ranges send a Range header).
+        let mut res = plain(StatusCode::NO_CONTENT, "");
+        let headers = res.headers_mut();
+        headers.insert(
+            ACCESS_CONTROL_ALLOW_METHODS,
+            HeaderValue::from_static("GET, HEAD"),
+        );
+        headers.insert(
+            ACCESS_CONTROL_ALLOW_HEADERS,
+            HeaderValue::from_static("Range"),
+        );
+        return res;
+    }
     if req.method() != Method::GET && req.method() != Method::HEAD {
-        return Ok(plain(StatusCode::METHOD_NOT_ALLOWED, "method not allowed"));
+        return plain(StatusCode::METHOD_NOT_ALLOWED, "method not allowed");
     }
     let params: HashMap<String, String> = req
         .uri()
@@ -154,20 +216,97 @@ async fn handle(
         })
         .unwrap_or_default();
     if params.get("t") != Some(&shared.token) {
-        return Ok(plain(StatusCode::FORBIDDEN, "invalid token"));
+        return plain(StatusCode::FORBIDDEN, "invalid token");
     }
     let Some(target) = params.get("u").and_then(|u| allowed_url(u)) else {
-        return Ok(plain(StatusCode::BAD_REQUEST, "missing or unsupported url"));
+        return plain(StatusCode::BAD_REQUEST, "missing or unsupported url");
     };
-    let res = match req.uri().path() {
+    match req.uri().path() {
         "/stream" => {
             let session = params.get("s").cloned().unwrap_or_default();
-            stream(&shared, target, session).await
+            stream(shared, target, session).await
         }
-        "/logo" => logo(&shared, target).await,
+        "/logo" => logo(shared, target).await,
+        "/hls" => playlist(shared, target).await,
+        "/seg" => {
+            let range = req.headers().get(RANGE).cloned();
+            segment(shared, target, range).await
+        }
         _ => plain(StatusCode::NOT_FOUND, "not found"),
+    }
+}
+
+/// An HLS playlist with every address pointing back at the proxy.
+async fn playlist(shared: &Shared, target: url::Url) -> Response<Body> {
+    let fetched = tokio::time::timeout(Duration::from_secs(10), async {
+        let res = shared.http.get(target).send().await.ok()?;
+        if !res.status().is_success() {
+            return None;
+        }
+        let base = res.url().clone();
+        let content_type = res
+            .headers()
+            .get(CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("")
+            .to_owned();
+        let mut body = res.bytes_stream();
+        let mut data = Vec::new();
+        while let Some(chunk) = body.next().await {
+            data.extend_from_slice(&chunk.ok()?);
+            if data.len() > MAX_PLAYLIST_BYTES {
+                return None;
+            }
+        }
+        Some((base, content_type, data))
+    })
+    .await;
+    let Ok(Some((base, content_type, data))) = fetched else {
+        return plain(StatusCode::BAD_GATEWAY, "playlist unavailable");
     };
-    Ok(res)
+    if !is_playlist(&content_type, &data) {
+        return plain(StatusCode::BAD_GATEWAY, "not a playlist");
+    }
+    let text = String::from_utf8_lossy(&data);
+    let mut res =
+        Response::new(Full::new(Bytes::from(rewrite_playlist(&text, &base, shared))).boxed());
+    let headers = res.headers_mut();
+    headers.insert(
+        CONTENT_TYPE,
+        HeaderValue::from_static("application/vnd.apple.mpegurl"),
+    );
+    headers.insert(CACHE_CONTROL, HeaderValue::from_static("no-store"));
+    res
+}
+
+/// An HLS segment (or key, init section) passed through, byte ranges included.
+async fn segment(shared: &Shared, target: url::Url, range: Option<HeaderValue>) -> Response<Body> {
+    let mut request = shared.http.get(target);
+    if let Some(range) = range {
+        request = request.header(RANGE, range);
+    }
+    let upstream = match request.send().await {
+        Ok(res) if res.status().is_success() => res,
+        _ => return plain(StatusCode::BAD_GATEWAY, "segment unavailable"),
+    };
+    let status = upstream.status();
+    let copied: Vec<_> = [CONTENT_TYPE, CONTENT_LENGTH, CONTENT_RANGE]
+        .into_iter()
+        .filter_map(|name| upstream.headers().get(&name).cloned().map(|v| (name, v)))
+        .collect();
+    let frames = upstream
+        .bytes_stream()
+        .take_while(|chunk| futures_util::future::ready(chunk.is_ok()))
+        .filter_map(|chunk| futures_util::future::ready(chunk.ok()))
+        .map(|bytes| Ok::<_, Infallible>(Frame::data(bytes)));
+    let mut res = Response::new(BodyExt::boxed(StreamBody::new(frames)));
+    *res.status_mut() = StatusCode::from_u16(status.as_u16()).unwrap_or(StatusCode::OK);
+    for (name, value) in copied {
+        if let Ok(value) = HeaderValue::from_bytes(value.as_bytes()) {
+            res.headers_mut().insert(name, value);
+        }
+    }
+    res
 }
 
 /// Only `http:` and `https:` targets are fetched.

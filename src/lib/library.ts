@@ -1,4 +1,12 @@
-import type { LibraryData, Settings, Station } from './types';
+import { defaultEq, restoreEq } from './eq';
+import { defaultShortcuts, restoreShortcuts } from './keybindings';
+import {
+  CUSTOM_PREFIX,
+  type LibraryData,
+  type ResolvedStream,
+  type Settings,
+  type Station,
+} from './types';
 
 export const RECENT_MAX = 25;
 
@@ -9,9 +17,12 @@ export const defaultSettings: Settings = {
   resumeOnStart: false,
   closeToTray: true,
   alwaysOnTop: false,
-  compact: false,
+  mini: false,
   language: 'auto',
   announceTitles: false,
+  visualizer: true,
+  eq: defaultEq,
+  shortcuts: defaultShortcuts(),
 };
 
 export const emptyLibrary: LibraryData = { favorites: [], recent: [] };
@@ -34,9 +45,14 @@ export function restoreSettings(raw: unknown): Settings {
     resumeOnStart: bool('resumeOnStart'),
     closeToTray: bool('closeToTray'),
     alwaysOnTop: bool('alwaysOnTop'),
-    compact: bool('compact'),
-    language: value.language === 'de' || value.language === 'en' ? value.language : 'auto',
+    mini: bool('mini'),
+    language: ['de', 'en', 'es', 'fr'].includes(value.language as string)
+      ? (value.language as Settings['language'])
+      : 'auto',
     announceTitles: bool('announceTitles'),
+    visualizer: bool('visualizer'),
+    eq: restoreEq(value.eq),
+    shortcuts: restoreShortcuts(value.shortcuts),
   };
 }
 
@@ -81,6 +97,17 @@ export function toggleFavorite(lib: LibraryData, station: Station): LibraryData 
   return isFavorite(lib, station.id) ? removeFavorite(lib, station.id) : addFavorite(lib, station);
 }
 
+/** Moves a favourite to position `to` (drag and drop). */
+export function moveFavoriteTo(lib: LibraryData, id: string, to: number): LibraryData {
+  const from = lib.favorites.findIndex((s) => s.id === id);
+  const target = Math.min(Math.max(to, 0), lib.favorites.length - 1);
+  if (from < 0 || from === target) return lib;
+  const favorites = [...lib.favorites];
+  const [item] = favorites.splice(from, 1);
+  favorites.splice(target, 0, item!);
+  return { ...lib, favorites };
+}
+
 /** Moves a favourite by `delta` places (−1 up, +1 down); stays put at the ends. */
 export function moveFavorite(lib: LibraryData, id: string, delta: number): LibraryData {
   const from = lib.favorites.findIndex((s) => s.id === id);
@@ -106,8 +133,41 @@ export function clearRecent(lib: LibraryData): LibraryData {
  * directory no longer knows are kept as they are: a favourite never disappears by itself.
  */
 export function refreshStations(list: Station[], fresh: Station[]): Station[] {
+  // Own stations are not in the directory; fresh data never matches them.
   const byId = new Map(fresh.map((s) => [s.id, s]));
   return list.map((s) => byId.get(s.id) ?? s);
+}
+
+export function isCustom(station: Station): boolean {
+  return station.id.startsWith(CUSTOM_PREFIX);
+}
+
+/** A station the user added by address (checked by the Rust side first). */
+export function customStation(
+  input: { name: string; favicon: string },
+  stream: ResolvedStream,
+  id = `${CUSTOM_PREFIX}${crypto.randomUUID()}`,
+): Station {
+  return {
+    id,
+    name: input.name.trim() || stream.name.trim() || new URL(stream.url).hostname,
+    url: stream.url,
+    homepage: '',
+    favicon: input.favicon.trim(),
+    tags: [],
+    country: '',
+    countryCode: '',
+    language: '',
+    codec: stream.hls ? 'HLS' : stream.codec,
+    bitrate: stream.bitrate,
+    hls: stream.hls,
+  };
+}
+
+/** Replaces a station everywhere (after editing an own station). */
+export function replaceStation(lib: LibraryData, station: Station): LibraryData {
+  const swap = (list: Station[]) => list.map((s) => (s.id === station.id ? station : s));
+  return { favorites: swap(lib.favorites), recent: swap(lib.recent) };
 }
 
 /** Neighbour in the favourites, for the media keys "next" and "previous". */
