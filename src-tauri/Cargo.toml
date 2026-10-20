@@ -3,7 +3,7 @@ members = [".", "crates/streamproxy"]
 
 [workspace.package]
 edition = "2021"
-version = "0.3.0"
+version = "0.3.1"
 publish = false
 license = "MIT"
 repository = "https://github.com/SysSteve/sysradio"

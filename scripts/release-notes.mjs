@@ -17,7 +17,7 @@ export const INSTALL = `### Install
 
 Requirements: internet connection; on Windows the Microsoft Edge WebView2 runtime (built into Windows 11 and current Windows 10, otherwise the installer adds it). Details: [system requirements](https://github.com/SysSteve/sysradio#system-requirements).
 
-The installers are not code-signed yet. Windows may show "Windows protected your PC": choose **More info → Run anyway**; with Smart App Control on, Windows 11 blocks unsigned apps until code signing is in place. On macOS, open the app with right-click → **Open** the first time.`;
+The installers are not code-signed yet. Windows may show "Windows protected your PC": choose **More info → Run anyway**; with Smart App Control on, Windows 11 blocks unsigned apps until code signing is in place. On macOS, the first start says Apple could not verify the app: open **System Settings → Privacy & Security**, click **Open Anyway** and confirm with **Open**.`;
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const version = (process.argv[2] ?? '').replace(/^v/, '');

@@ -25,6 +25,12 @@ export const es: Messages = {
   'player.pinOn': 'Siempre visible',
   'player.nowPlaying': (title) => `Ahora suena: ${title}`,
 
+  'sleep.label': 'Temporizador de apagado',
+  'sleep.off': 'Desactivado',
+  'sleep.minutes': (n) => `${n} minutos`,
+  'sleep.remaining': (n) => `Temporizador: se detiene en ${n} min`,
+  'sleep.stopped': 'El temporizador terminó: se detuvo la reproducción.',
+
   'tabs.label': 'Secciones',
   'tabs.favorites': 'Favoritos',
   'tabs.search': 'Buscar',

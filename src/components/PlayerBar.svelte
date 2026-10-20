@@ -15,6 +15,7 @@
   import { toLevels } from '../lib/spectrum';
   import { tooltip } from '../lib/tooltip';
   import type { ShortcutAction } from '../lib/types';
+  import SleepTimer from './SleepTimer.svelte';
   import StationLogo from './StationLogo.svelte';
   import Visualizer from './Visualizer.svelte';
 
@@ -172,6 +173,7 @@
     </div>
 
     <div class="window-group">
+      <SleepTimer {app} />
       <button
         class="hero-btn"
         aria-label={t('player.pinOn')}

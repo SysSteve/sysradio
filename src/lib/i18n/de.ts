@@ -23,6 +23,12 @@ export const de = {
   'player.pinOn': 'Immer im Vordergrund',
   'player.nowPlaying': (title: string) => `Jetzt läuft: ${title}`,
 
+  'sleep.label': 'Schlaf-Timer',
+  'sleep.off': 'Aus',
+  'sleep.minutes': (n: number) => `${n} Minuten`,
+  'sleep.remaining': (n: number) => `Schlaf-Timer: stoppt in ${n} Min.`,
+  'sleep.stopped': 'Schlaf-Timer abgelaufen: Wiedergabe gestoppt.',
+
   'tabs.label': 'Bereiche',
   'tabs.favorites': 'Favoriten',
   'tabs.search': 'Suchen',

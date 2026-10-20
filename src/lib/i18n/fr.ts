@@ -28,6 +28,12 @@ export const fr: Messages = {
   'player.pinOn': 'Toujours au premier plan',
   'player.nowPlaying': (title) => `En cours de lecture : ${title}`,
 
+  'sleep.label': 'Minuterie de mise en veille',
+  'sleep.off': 'Désactivée',
+  'sleep.minutes': (n) => `${n} minutes`,
+  'sleep.remaining': (n) => `Minuterie\u00a0: arrêt dans ${n}\u00a0min`,
+  'sleep.stopped': 'Minuterie écoulée\u00a0: lecture arrêtée.',
+
   'tabs.label': 'Sections',
   'tabs.favorites': 'Favoris',
   'tabs.search': 'Rechercher',

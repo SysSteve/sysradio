@@ -67,6 +67,11 @@ export class AppState {
   updateProgress = $state<number | null>(null);
   /** "Later" hides the notice until the next start. */
   updateDismissed = $state(false);
+  /** Sleep timer: playback stops at this time (ms since epoch); null when off. */
+  sleepUntil = $state<number | null>(null);
+  /** Updated every few seconds while the sleep timer runs (for the remaining minutes). */
+  now = $state(Date.now());
+  #sleepTimer: ReturnType<typeof setInterval> | undefined;
   /** Text for screen readers after drag and drop or similar silent changes. */
   announcement = $state('');
   readonly systemLanguage: string;
@@ -296,6 +301,29 @@ export class AppState {
       case 'show':
         return void this.platform.showWindow();
     }
+  }
+
+  // --- Sleep timer ---------------------------------------------------------------------------
+
+  get sleepMinutesLeft(): number | null {
+    return this.sleepUntil === null
+      ? null
+      : Math.max(1, Math.ceil((this.sleepUntil - this.now) / 60_000));
+  }
+
+  setSleepTimer(minutes: number | null) {
+    clearInterval(this.#sleepTimer);
+    this.now = Date.now();
+    this.sleepUntil = minutes ? this.now + minutes * 60_000 : null;
+    if (!minutes) return;
+    this.#sleepTimer = setInterval(() => {
+      this.now = Date.now();
+      if (this.sleepUntil !== null && this.now >= this.sleepUntil) {
+        this.setSleepTimer(null);
+        if (this.player.active) this.player.stop();
+        this.notice = { text: this.t('sleep.stopped') };
+      }
+    }, 5_000);
   }
 
   // --- Updates -----------------------------------------------------------------------------

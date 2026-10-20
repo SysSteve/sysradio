@@ -24,6 +24,14 @@ const VIEWS: { name: string; favorites?: string[]; prepare: (page: Page) => Prom
     },
   },
   {
+    name: 'sleep timer panel',
+    favorites: ['s1'],
+    prepare: async (page) => {
+      await page.getByRole('button', { name: 'Schlaf-Timer' }).click();
+      await expect(page.getByRole('radio', { name: '30 Minuten' })).toBeVisible();
+    },
+  },
+  {
     name: 'favourites, empty',
     favorites: ['s1'],
     prepare: async (page) => {

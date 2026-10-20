@@ -239,3 +239,24 @@ test('updates: manual check, notice, progress, later', async ({ page }) => {
     notice.getByText('Update wird installiert, SysRadio startet gleich neu …'),
   ).toBeVisible();
 });
+
+test('sleep timer stops playback after the chosen time', async ({ page }) => {
+  await page.clock.install();
+  await open(page, ['s1']);
+  await page.getByRole('button', { name: 'Beispielwelle Pop abspielen' }).click();
+  const player = page.getByRole('region', { name: 'Player' });
+  await expect(player.getByRole('button', { name: 'Stopp' })).toBeVisible();
+  await player.getByRole('button', { name: 'Schlaf-Timer' }).click();
+  await page.getByRole('radio', { name: '15 Minuten' }).click();
+  await expect(
+    player.getByRole('button', { name: 'Schlaf-Timer: stoppt in 15 Min.' }),
+  ).toBeVisible();
+  await page.clock.fastForward('10:00');
+  await expect(
+    player.getByRole('button', { name: 'Schlaf-Timer: stoppt in 5 Min.' }),
+  ).toBeVisible();
+  await page.clock.fastForward('05:10');
+  await expect(player.getByRole('button', { name: 'Abspielen' })).toBeVisible();
+  await expect(page.getByText('Schlaf-Timer abgelaufen: Wiedergabe gestoppt.')).toBeVisible();
+  await expect(player.getByRole('button', { name: 'Schlaf-Timer' })).toBeVisible();
+});

@@ -6,6 +6,18 @@ All notable changes to SysRadio. The format follows
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-20
+
+### Added
+
+- Sleep timer: the moon button in the player stops playback after 15 to 90 minutes and shows
+  the minutes left.
+
+### Changed
+
+- README and release notes explain how to open SysRadio on current macOS versions until it is
+  notarized.
+
 ## [0.3.0] - 2026-10-20
 
 ### Added
@@ -72,7 +84,8 @@ All notable changes to SysRadio. The format follows
 First version: search, favorites, history, now playing, tray, media keys, autostart, English
 and German.
 
-[Unreleased]: https://github.com/SysSteve/sysradio/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/SysSteve/sysradio/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/SysSteve/sysradio/releases/tag/v0.3.1
 [0.3.0]: https://github.com/SysSteve/sysradio/releases/tag/v0.3.0
 [0.2.2]: https://github.com/SysSteve/sysradio/releases/tag/v0.2.2
 [0.2.1]: https://github.com/SysSteve/sysradio/releases/tag/v0.2.1

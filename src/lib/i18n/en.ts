@@ -25,6 +25,12 @@ export const en: Messages = {
   'player.pinOn': 'Always on top',
   'player.nowPlaying': (title) => `Now playing: ${title}`,
 
+  'sleep.label': 'Sleep timer',
+  'sleep.off': 'Off',
+  'sleep.minutes': (n) => `${n} minutes`,
+  'sleep.remaining': (n) => `Sleep timer: stops in ${n} min`,
+  'sleep.stopped': 'Sleep timer ended: playback stopped.',
+
   'tabs.label': 'Sections',
   'tabs.favorites': 'Favorites',
   'tabs.search': 'Search',
