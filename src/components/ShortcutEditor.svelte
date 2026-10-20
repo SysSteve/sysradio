@@ -170,6 +170,9 @@
   }
 
   .key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     width: 100%;
     min-width: 72px;
     min-height: 34px;
