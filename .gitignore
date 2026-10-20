@@ -12,3 +12,6 @@ playwright-report/
 /CLAUDE.local.md
 /internal
 /.claude/
+
+# Generated winget manifests (submitted to microsoft/winget-pkgs)
+/winget/

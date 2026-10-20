@@ -77,7 +77,9 @@
     "macOS": {
       "minimumSystemVersion": "11.0"
     },
-    "createUpdaterArtifacts": true
+    "createUpdaterArtifacts": true,
+    "publisher": "SysSteve",
+    "homepage": "https://github.com/SysSteve/sysradio"
   },
   "plugins": {
     "updater": {
