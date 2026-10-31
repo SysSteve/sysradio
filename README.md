@@ -116,12 +116,19 @@ Download the latest installer from
 
 The installers are not code-signed yet. Windows may show "Windows protected your PC": choose
 **More info → Run anyway**. With Smart App Control turned on, Windows 11 blocks unsigned apps
-completely until code signing is in place.
+completely until code signing is in place. SysRadio has applied for free code signing by the
+SignPath Foundation; see the [code signing policy](CODE_SIGNING.md).
 
 On macOS, the first start shows "Apple could not verify SysRadio is free of malware", because the
 app is not notarized yet. Click **Done**, open **System Settings → Privacy & Security**, scroll
 down and click **Open Anyway**, then confirm with **Open** (macOS may ask for your password).
 After that SysRadio opens normally. Code signing and notarization are planned.
+
+## Code signing policy
+
+Free code signing provided by [SignPath.io](https://signpath.io), certificate by
+[SignPath Foundation](https://signpath.org) (application pending). What is signed, who approves
+it and how to verify a download: [CODE_SIGNING.md](CODE_SIGNING.md).
 
 ## Build from source
 
