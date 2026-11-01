@@ -3,9 +3,8 @@
 Free code signing provided by [SignPath.io](https://signpath.io), certificate by
 [SignPath Foundation](https://signpath.org).
 
-> **Status:** SysRadio has applied to the SignPath Foundation program (October 2026). Until the
-> application is approved and signing is set up, the Windows installers are **not**
-> Authenticode-signed. This page will name the first signed version once there is one.
+> **Status:** Code signing through the SignPath Foundation program is planned. Until it is set
+> up, the Windows installers are **not** Authenticode-signed. This page will name the first signed version once there is one.
 
 ## What is signed
 
