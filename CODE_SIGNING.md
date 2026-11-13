@@ -47,5 +47,14 @@ Official downloads are only on [GitHub Releases](https://github.com/SysSteve/sys
 Once signing is active, the Windows files will show **SignPath Foundation** as the publisher
 (file properties → Digital Signatures).
 
+Independent of code signing, every installer and update package built from a version tag carries
+a signed [build provenance attestation](https://docs.github.com/en/actions/security-guides/using-artifact-attestations-to-establish-provenance-for-builds)
+that links the file to the workflow run and commit that built it. With the
+[GitHub CLI](https://cli.github.com) you can check a downloaded file:
+
+```sh
+gh attestation verify SysRadio_x.y.z_x64-setup.exe --repo SysSteve/sysradio
+```
+
 Something signed with this certificate that looks wrong? Please report it as described in
 [SECURITY.md](SECURITY.md).

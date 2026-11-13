@@ -124,6 +124,10 @@ app is not notarized yet. Click **Done**, open **System Settings → Privacy & S
 down and click **Open Anyway**, then confirm with **Open** (macOS may ask for your password).
 After that SysRadio opens normally. Code signing and notarization are planned.
 
+To check that a download was built from this repository, verify its build provenance with the
+[GitHub CLI](https://cli.github.com): `gh attestation verify <file> --repo SysSteve/sysradio`
+(details in [CODE_SIGNING.md](CODE_SIGNING.md)).
+
 ## Code signing policy
 
 Free code signing provided by [SignPath.io](https://signpath.io), certificate by

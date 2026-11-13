@@ -10,6 +10,8 @@ on:
 
 permissions:
   contents: write
+  id-token: write # sign the build provenance attestation
+  attestations: write
 
 jobs:
   build:
@@ -52,7 +54,8 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           workspaces: src-tauri
-      - uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
+      - id: tauri
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # action-v1.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Signs the update packages; the app only installs updates signed with this key.
@@ -68,3 +71,21 @@ jobs:
           uploadUpdaterJson: true
           updaterJsonPreferNsis: true
           uploadWorkflowArtifacts: true
+      # Signed provenance for every installer and update package (verify with `gh attestation verify`).
+      - name: Collect files to attest
+        id: subjects
+        shell: bash
+        env:
+          ARTIFACT_PATHS: ${{ steps.tauri.outputs.artifactPaths }}
+        run: |
+          node -e '
+            const paths = JSON.parse(process.env.ARTIFACT_PATHS || "[]")
+              .filter((p) => /(-setup\.exe|\.dmg|\.app\.tar\.gz)$/.test(p));
+            if (paths.length === 0) { console.error("No artifacts to attest"); process.exit(1); }
+            const out = "paths<<__PATHS__\n" + paths.join("\n") + "\n__PATHS__\n";
+            require("fs").appendFileSync(process.env.GITHUB_OUTPUT, out);
+            console.log(paths.join("\n"));
+          '
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ${{ steps.subjects.outputs.paths }}

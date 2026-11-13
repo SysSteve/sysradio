@@ -6,6 +6,24 @@ All notable changes to SysRadio. The format follows
 
 ## [Unreleased]
 
+## [0.3.3] - 2026-11-13
+
+### Changed
+
+- Windows shows "SysSteve" as the publisher in the installer and under installed apps. An
+  existing installation updates in place as before.
+- Every installer and update package now comes with a signed build provenance attestation:
+  `gh attestation verify <file> --repo SysSteve/sysradio` shows that a download was built from
+  this repository. See the
+  [code signing policy](https://github.com/SysSteve/sysradio/blob/main/CODE_SIGNING.md).
+- The Windows app declares its supported Windows versions and that it runs without
+  administrator rights.
+
+### Security
+
+- Updated dependencies, among them the updater, the async runtime and the certificate
+  checks.
+
 ## [0.3.2] - 2026-10-20
 
 ### Changed
@@ -97,7 +115,8 @@ All notable changes to SysRadio. The format follows
 First version: search, favorites, history, now playing, tray, media keys, autostart, English
 and German.
 
-[Unreleased]: https://github.com/SysSteve/sysradio/compare/v0.3.2...HEAD
+[Unreleased]: https://github.com/SysSteve/sysradio/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/SysSteve/sysradio/releases/tag/v0.3.3
 [0.3.2]: https://github.com/SysSteve/sysradio/releases/tag/v0.3.2
 [0.3.1]: https://github.com/SysSteve/sysradio/releases/tag/v0.3.1
 [0.3.0]: https://github.com/SysSteve/sysradio/releases/tag/v0.3.0
