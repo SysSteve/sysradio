@@ -4,6 +4,7 @@
 //! in mini mode the main window stays hidden (but alive, it plays the audio).
 
 mod mixer;
+mod placement;
 
 use serde::Deserialize;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -232,8 +233,68 @@ fn tray_menu(app: &AppHandle, tray: &TrayState) -> tauri::Result<Menu<tauri::Wry
     )
 }
 
+/// Moves a window that is off every screen (or larger than the screen) back into view.
+///
+/// Works in logical points on macOS, where the global desktop space is in points and each
+/// monitor has its own factor: physical values of mixed-scale screens do not add up there,
+/// which is what breaks the window-state plugin. Elsewhere physical pixels are global, so
+/// the factor is 1.
+fn ensure_on_screen(window: &tauri::WebviewWindow) {
+    use placement::Rect;
+    let factor = |scale: f64| {
+        if cfg!(target_os = "macos") {
+            scale
+        } else {
+            1.0
+        }
+    };
+    // Windows reports -32000/-32000 for a minimized window; the system restores it itself.
+    if window.is_minimized().unwrap_or(false) {
+        return;
+    }
+    let (Ok(pos), Ok(size)) = (window.outer_position(), window.outer_size()) else {
+        return;
+    };
+    let wf = factor(window.scale_factor().unwrap_or(1.0));
+    let current = Rect::new(
+        (pos.x as f64 / wf).round() as i32,
+        (pos.y as f64 / wf).round() as i32,
+        (size.width as f64 / wf).round() as u32,
+        (size.height as f64 / wf).round() as u32,
+    );
+    let area = |m: &tauri::Monitor| {
+        let f = factor(m.scale_factor());
+        let a = m.work_area();
+        Rect::new(
+            (a.position.x as f64 / f).round() as i32,
+            (a.position.y as f64 / f).round() as i32,
+            (a.size.width as f64 / f).round() as u32,
+            (a.size.height as f64 / f).round() as u32,
+        )
+    };
+    let mut areas: Vec<Rect> = Vec::new();
+    if let Ok(Some(primary)) = window.primary_monitor() {
+        areas.push(area(&primary));
+    }
+    for m in window.available_monitors().unwrap_or_default() {
+        let a = area(&m);
+        if !areas.contains(&a) {
+            areas.push(a);
+        }
+    }
+    if let Some(fixed) = placement::corrected(current, &areas) {
+        log::info!(
+            "{} was off screen or too large: {current:?} -> {fixed:?}",
+            window.label()
+        );
+        let _ = window.set_size(tauri::LogicalSize::new(fixed.w as f64, fixed.h as f64));
+        let _ = window.set_position(tauri::LogicalPosition::new(fixed.x as f64, fixed.y as f64));
+    }
+}
+
 fn show_window_by_label(app: &AppHandle, label: &str) {
     if let Some(window) = app.get_webview_window(label) {
+        ensure_on_screen(&window);
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
