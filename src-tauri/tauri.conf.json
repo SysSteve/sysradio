@@ -31,6 +31,8 @@
         "height": 104,
         "minWidth": 200,
         "minHeight": 64,
+        "maxWidth": 960,
+        "maxHeight": 360,
         "visible": false,
         "decorations": false,
         "alwaysOnTop": true,

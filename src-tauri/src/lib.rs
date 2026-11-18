@@ -5,11 +5,12 @@
 
 mod mixer;
 mod placement;
+mod winstate;
 
 use serde::Deserialize;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
-use std::time::Duration;
+use std::sync::{Arc, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 use streamproxy::directory::{Directory, Facet, Search, Station};
 use streamproxy::proxy::{self, ProxyInfo, TitleEvent};
 use streamproxy::resolve::{Resolved, Resolver};
@@ -18,7 +19,6 @@ use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent}
 use tauri::webview::PageLoadEvent;
 use tauri::{AppHandle, Emitter, Manager, State, WindowEvent};
 use tauri_plugin_log::{RotationStrategy, Target, TargetKind};
-use tauri_plugin_window_state::StateFlags;
 
 const USER_AGENT: &str = concat!("SysRadio/", env!("CARGO_PKG_VERSION"));
 const TRAY_ID: &str = "main";
@@ -39,6 +39,15 @@ struct AppState {
     mini_mode: AtomicBool,
     ui_shown: AtomicBool,
     started_hidden: bool,
+    /// Remembered window geometry, see `winstate`.
+    windows: Mutex<WindowStore>,
+}
+
+struct WindowStore {
+    file: winstate::File,
+    /// Labels whose saved geometry has been applied (once per run, before the first show).
+    restored: Vec<&'static str>,
+    last_write: Option<Instant>,
 }
 
 impl AppState {
@@ -137,6 +146,7 @@ fn set_mini_mode(app: AppHandle, state: AppStateRef<'_>, enabled: bool) {
     state.mini_mode.store(enabled, Ordering::Relaxed);
     let (show, hide) = if enabled { (MINI, MAIN) } else { (MAIN, MINI) };
     if let Some(window) = app.get_webview_window(hide) {
+        remember_window(&window.as_ref().window(), true);
         let _ = window.hide();
     }
     show_window_by_label(&app, show);
@@ -146,6 +156,7 @@ fn set_mini_mode(app: AppHandle, state: AppStateRef<'_>, enabled: bool) {
 #[tauri::command]
 fn hide_window(app: AppHandle, state: AppStateRef<'_>) {
     if let Some(window) = app.get_webview_window(state.current_label()) {
+        remember_window(&window.as_ref().window(), true);
         let _ = window.hide();
     }
 }
@@ -233,37 +244,164 @@ fn tray_menu(app: &AppHandle, tray: &TrayState) -> tauri::Result<Menu<tauri::Wry
     )
 }
 
-/// Moves a window that is off every screen (or larger than the screen) back into view.
+/// Placement units: logical points on macOS, physical pixels elsewhere.
 ///
-/// Works in logical points on macOS, where the global desktop space is in points and each
-/// monitor has its own factor: physical values of mixed-scale screens do not add up there,
-/// which is what breaks the window-state plugin. Elsewhere physical pixels are global, so
-/// the factor is 1.
-fn ensure_on_screen(window: &tauri::WebviewWindow) {
-    use placement::Rect;
-    let factor = |scale: f64| {
-        if cfg!(target_os = "macos") {
-            scale
-        } else {
-            1.0
-        }
+/// On macOS the global desktop space is in points and each monitor has its own factor:
+/// physical values of mixed-scale screens do not add up there (this broke the window-state
+/// plugin, which saved with one monitor's factor and restored with another's). Points are
+/// independent of the monitor, and tao applies `LogicalPosition`/`LogicalSize` as they are.
+/// Elsewhere physical pixels are global, so the factor is 1.
+fn unit_factor(scale: f64) -> f64 {
+    if cfg!(target_os = "macos") {
+        scale
+    } else {
+        1.0
+    }
+}
+
+/// Stored units per logical point: 1 on macOS (units are points), else the scale factor.
+fn units_per_point(window: &tauri::Window) -> f64 {
+    if cfg!(target_os = "macos") {
+        1.0
+    } else {
+        window.scale_factor().unwrap_or(1.0)
+    }
+}
+
+fn window_rect(window: &tauri::Window) -> Option<placement::Rect> {
+    let (pos, size) = (window.outer_position().ok()?, window.outer_size().ok()?);
+    let f = unit_factor(window.scale_factor().ok()?);
+    Some(placement::Rect::new(
+        (pos.x as f64 / f).round() as i32,
+        (pos.y as f64 / f).round() as i32,
+        (size.width as f64 / f).round() as u32,
+        (size.height as f64 / f).round() as u32,
+    ))
+}
+
+fn apply_rect(window: &tauri::Window, r: placement::Rect) {
+    if cfg!(target_os = "macos") {
+        let _ = window.set_size(tauri::LogicalSize::new(r.w as f64, r.h as f64));
+        let _ = window.set_position(tauri::LogicalPosition::new(r.x as f64, r.y as f64));
+    } else {
+        let _ = window.set_size(tauri::PhysicalSize::new(r.w, r.h));
+        let _ = window.set_position(tauri::PhysicalPosition::new(r.x, r.y));
+    }
+}
+
+fn window_state_path(app: &AppHandle) -> Option<std::path::PathBuf> {
+    app.path()
+        .app_config_dir()
+        .ok()
+        .map(|d| d.join("window-state.json"))
+}
+
+fn load_window_state(app: &AppHandle) {
+    let Some(path) = window_state_path(app) else {
+        return;
     };
+    // The old plugin's file stored positions with the wrong scale factor; drop it.
+    if let Some(dir) = path.parent() {
+        let _ = std::fs::remove_file(dir.join(".window-state.json"));
+    }
+    let file = std::fs::read_to_string(&path)
+        .ok()
+        .and_then(|text| winstate::parse(&text));
+    if let Some(file) = file {
+        app.state::<Arc<AppState>>().windows.lock().unwrap().file = file;
+    }
+}
+
+/// Keeps the window's current geometry in memory and writes the file when `flush` is set
+/// (hide, quit) or at most every 2 seconds while moving or resizing.
+fn remember_window(window: &tauri::Window, flush: bool) {
+    let label = window.label();
+    if label != MAIN && label != MINI {
+        return;
+    }
+    let app = window.app_handle();
+    let state = app.state::<Arc<AppState>>();
+    // Not yet placed by us: the start-up geometry must not overwrite the saved one.
+    if !state.windows.lock().unwrap().restored.contains(&label) {
+        return;
+    }
+    if window.is_minimized().unwrap_or(false) || !window.is_visible().unwrap_or(false) {
+        return;
+    }
+    let maximized = window.is_maximized().unwrap_or(false);
+    let previous = state.windows.lock().unwrap().file.get(label);
+    // While maximized keep the last normal rectangle.
+    let rect = if maximized {
+        previous.map(|p| p.rect)
+    } else {
+        window_rect(window)
+    };
+    let Some(rect) = rect else { return };
+    let Some(saved) = winstate::sanitized(
+        label,
+        winstate::Saved { rect, maximized },
+        units_per_point(window),
+    ) else {
+        return;
+    };
+    let mut store = state.windows.lock().unwrap();
+    if store.file.get(label) == Some(saved) && !flush {
+        return;
+    }
+    store.file.set(label, saved);
+    let due = store
+        .last_write
+        .is_none_or(|t| t.elapsed() > Duration::from_secs(2));
+    if !(flush || due) {
+        return;
+    }
+    store.last_write = Some(Instant::now());
+    let json = winstate::to_json(&store.file);
+    drop(store);
+    if let Some(path) = window_state_path(app) {
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        if let Err(e) = std::fs::write(&path, json) {
+            log::warn!("could not save the window state: {e}");
+        }
+    }
+}
+
+/// Applies the remembered geometry once, before the window is first shown.
+fn restore_window(window: &tauri::Window) {
+    let label: &'static str = if window.label() == MINI { MINI } else { MAIN };
+    let state = window.app_handle().state::<Arc<AppState>>();
+    let saved = {
+        let mut store = state.windows.lock().unwrap();
+        if store.restored.contains(&label) {
+            return;
+        }
+        store.restored.push(label);
+        store.file.get(label)
+    };
+    if let Some(saved) = saved.and_then(|s| winstate::sanitized(label, s, units_per_point(window)))
+    {
+        apply_rect(window, saved.rect);
+        if saved.maximized {
+            let _ = window.maximize();
+        }
+    }
+}
+
+/// Moves a window that is off every screen (or larger than the screen or its limit) back
+/// into view.
+fn ensure_on_screen(window: &tauri::Window) {
+    use placement::Rect;
     // Windows reports -32000/-32000 for a minimized window; the system restores it itself.
     if window.is_minimized().unwrap_or(false) {
         return;
     }
-    let (Ok(pos), Ok(size)) = (window.outer_position(), window.outer_size()) else {
+    let Some(current) = window_rect(window) else {
         return;
     };
-    let wf = factor(window.scale_factor().unwrap_or(1.0));
-    let current = Rect::new(
-        (pos.x as f64 / wf).round() as i32,
-        (pos.y as f64 / wf).round() as i32,
-        (size.width as f64 / wf).round() as u32,
-        (size.height as f64 / wf).round() as u32,
-    );
     let area = |m: &tauri::Monitor| {
-        let f = factor(m.scale_factor());
+        let f = unit_factor(m.scale_factor());
         let a = m.work_area();
         Rect::new(
             (a.position.x as f64 / f).round() as i32,
@@ -282,19 +420,24 @@ fn ensure_on_screen(window: &tauri::WebviewWindow) {
             areas.push(a);
         }
     }
-    if let Some(fixed) = placement::corrected(current, &areas) {
+    let max = (window.label() == MINI).then(|| {
+        let (_, (w, h)) = winstate::size_limits(MINI);
+        let u = units_per_point(window);
+        ((w as f64 * u).round() as u32, (h as f64 * u).round() as u32)
+    });
+    if let Some(fixed) = placement::corrected(current, &areas, max) {
         log::info!(
             "{} was off screen or too large: {current:?} -> {fixed:?}",
             window.label()
         );
-        let _ = window.set_size(tauri::LogicalSize::new(fixed.w as f64, fixed.h as f64));
-        let _ = window.set_position(tauri::LogicalPosition::new(fixed.x as f64, fixed.y as f64));
+        apply_rect(window, fixed);
     }
 }
 
 fn show_window_by_label(app: &AppHandle, label: &str) {
     if let Some(window) = app.get_webview_window(label) {
-        ensure_on_screen(&window);
+        restore_window(&window.as_ref().window());
+        ensure_on_screen(&window.as_ref().window());
         let _ = window.unminimize();
         let _ = window.show();
         let _ = window.set_focus();
@@ -311,6 +454,7 @@ fn toggle_window(app: &AppHandle) {
     let label = app.state::<Arc<AppState>>().current_label();
     if let Some(window) = app.get_webview_window(label) {
         if window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false) {
+            remember_window(&window.as_ref().window(), true);
             let _ = window.hide();
         } else {
             show_window_by_label(app, label);
@@ -398,6 +542,11 @@ pub fn run() {
         mini_mode: AtomicBool::new(false),
         ui_shown: AtomicBool::new(false),
         started_hidden,
+        windows: Mutex::new(WindowStore {
+            file: winstate::File::new(),
+            restored: Vec::new(),
+            last_write: None,
+        }),
     });
 
     tauri::Builder::default()
@@ -430,18 +579,13 @@ pub fn run() {
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(
-            tauri_plugin_window_state::Builder::default()
-                // Visibility is ours to decide (tray start), size and position are restored.
-                .with_state_flags(StateFlags::all() & !StateFlags::VISIBLE)
-                .build(),
-        )
         .setup(move |app| {
             log::info!(
                 "SysRadio {} starting (hidden: {started_hidden})",
                 env!("CARGO_PKG_VERSION")
             );
             let _ = handle_slot.set(app.handle().clone());
+            load_window_state(app.handle());
             build_tray(app.handle())?;
             if !started_hidden {
                 let handle = app.handle().clone();
@@ -464,13 +608,18 @@ pub fn run() {
             log::info!("{} {event}: {}", webview.label(), payload.url());
         })
         .on_window_event(|window, event| {
+            if matches!(event, WindowEvent::Moved(_) | WindowEvent::Resized(_)) {
+                remember_window(window, false);
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 let state = window.state::<Arc<AppState>>();
                 // The floating player always goes to the tray (Alt+F4 included).
                 if window.label() == MINI || state.close_to_tray.load(Ordering::Relaxed) {
                     api.prevent_close();
+                    remember_window(window, true);
                     let _ = window.hide();
                 } else {
+                    remember_window(window, true);
                     window.app_handle().exit(0);
                 }
             }
@@ -492,6 +641,15 @@ pub fn run() {
             show_current_window,
             update_tray
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running SysRadio");
+        .build(tauri::generate_context!())
+        .expect("error while building SysRadio")
+        .run(|app, event| {
+            if let tauri::RunEvent::Exit = event {
+                for label in [MAIN, MINI] {
+                    if let Some(window) = app.get_webview_window(label) {
+                        remember_window(&window.as_ref().window(), true);
+                    }
+                }
+            }
+        });
 }

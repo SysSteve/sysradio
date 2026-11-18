@@ -25,7 +25,6 @@
     {
       "identifier": "opener:allow-open-url",
       "allow": [{ "url": "https://github.com/SysSteve/*" }]
-    },
-    "window-state:default"
+    }
   ]
 }
