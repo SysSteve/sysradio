@@ -6,6 +6,21 @@ All notable changes to SysRadio. The format follows
 
 ## [Unreleased]
 
+## [0.3.4] - 2026-11-18
+
+### Fixed
+
+- macOS: keyboard shortcuts, both in the app and system-wide, can be changed again. Recording
+  no longer depends on the clicked button having focus. A click elsewhere ends the recording.
+- macOS: the floating player and "Show window" in the menu bar could open a window outside
+  every screen, for example with a Retina display next to a regular monitor. A window that is
+  off screen or larger than the screen is now moved back and centred before it is shown.
+
+### Changed
+
+- macOS: the shortcut hints name Control, Option and Command, and warn that Option alone types
+  characters such as @ or €.
+
 ## [0.3.3] - 2026-11-13
 
 ### Changed
