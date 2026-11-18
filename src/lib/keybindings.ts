@@ -81,8 +81,12 @@ export function validGlobal(b: KeyBinding): boolean {
   return hasModifier(b);
 }
 
-/** Ctrl+Alt is AltGr on many layouts: worth a warning when recording. */
-export function mayCollideWithAltGr(b: KeyBinding): boolean {
+/**
+ * Worth a warning when recording. Windows: Ctrl+Alt is AltGr on many layouts. macOS: Option
+ * alone types characters such as @ or €.
+ */
+export function mayCollideWithAltGr(b: KeyBinding, mac = false): boolean {
+  if (mac) return b.alt && !b.ctrl && !b.meta;
   return b.ctrl && b.alt && !b.meta;
 }
 

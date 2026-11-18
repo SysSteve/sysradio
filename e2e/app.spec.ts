@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import { open } from './helpers';
 
 test.use({ locale: 'de-DE' });
@@ -170,6 +170,62 @@ test('shortcuts work after clicking a button and can be reassigned', async ({ pa
   await expect(page.locator('.tooltip')).toContainText('Strg+Umschalt+U');
   await page.keyboard.press('Escape');
   await expect(page.locator('.tooltip')).toHaveCount(0);
+});
+
+// Like WKWebView on macOS: a click does not focus a button, and focus() cannot help either.
+async function disableButtonFocus(page: Page) {
+  await page.evaluate(() => {
+    document.addEventListener('mousedown', (e) => e.preventDefault(), true);
+    HTMLElement.prototype.focus = () => {};
+  });
+}
+
+// WKWebView on macOS does not focus a button on click: keys go to body.
+for (const scope of ['In der App', 'Systemweit'] as const) {
+  test(`recording a shortcut works without focus on the button (${scope})`, async ({ page }) => {
+    await open(page);
+    await page.getByRole('tab', { name: 'Einstellungen' }).click();
+    await disableButtonFocus(page);
+    const name = new RegExp(`^Abspielen / Stopp, ${scope}: Kürzel ändern`);
+    await page.getByRole('button', { name }).click();
+    await expect(page.locator('[data-recording]')).not.toBeFocused();
+    await page.keyboard.press(scope === 'Systemweit' ? 'Control+Shift+KeyY' : 'KeyJ');
+    await expect(page.locator('[data-recording]')).toHaveCount(0);
+    await expect(page.getByRole('button', { name })).toHaveAccessibleName(
+      scope === 'Systemweit' ? /\(Strg\+Umschalt\+Y\)/ : /\(J\)/,
+    );
+  });
+}
+
+test('recording does not trigger app actions without focus on the button', async ({ page }) => {
+  await open(page, ['s1', 's2']);
+  const player = page.getByRole('region', { name: 'Player' });
+  await page.getByRole('tab', { name: 'Einstellungen' }).click();
+  await disableButtonFocus(page);
+  // Space plays or stops in the app; while recording it is only recorded.
+  const mute = page.getByRole('button', { name: /^Stumm schalten, In der App: Kürzel ändern/ });
+  await mute.click();
+  await page.keyboard.press('Space');
+  await expect(mute).toHaveAccessibleName(/\(Leertaste\)/);
+  await expect(player.getByRole('button', { name: 'Abspielen' })).toBeVisible();
+  // Same for a system-wide shortcut: a bare Space is refused and does not play either.
+  const global = page.getByRole('button', { name: /^Lauter, Systemweit: Kürzel ändern/ });
+  await global.click();
+  await page.keyboard.press('Space');
+  await expect(
+    page.getByText('Systemweite Kürzel brauchen Strg, Alt oder die Windows-Taste.'),
+  ).toBeVisible();
+  await expect(page.locator('[data-recording]')).toHaveCount(1);
+  await expect(player.getByRole('button', { name: 'Abspielen' })).toBeVisible();
+});
+
+test('recording a shortcut ends on a click elsewhere', async ({ page }) => {
+  await open(page);
+  await page.getByRole('tab', { name: 'Einstellungen' }).click();
+  await page.getByRole('button', { name: /^Stumm schalten, In der App: Kürzel ändern/ }).click();
+  await expect(page.locator('[data-recording]')).toHaveCount(1);
+  await page.getByRole('heading', { name: 'Tastenkürzel' }).click();
+  await expect(page.locator('[data-recording]')).toHaveCount(0);
 });
 
 test('languages: Spanish and French, saved', async ({ page }) => {

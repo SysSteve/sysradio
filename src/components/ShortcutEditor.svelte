@@ -10,6 +10,7 @@
 
   let { app }: { app: AppState } = $props();
   const t = $derived(app.t);
+  const mac = $derived(app.platform.isMac);
 
   type Scope = 'local' | 'global';
   let recording = $state<{ action: ShortcutAction; scope: Scope } | null>(null);
@@ -18,13 +19,29 @@
   const scopeName = (scope: Scope) =>
     scope === 'local' ? t('shortcuts.inApp') : t('shortcuts.global');
 
-  function start(action: ShortcutAction, scope: Scope) {
+  function start(e: MouseEvent, action: ShortcutAction, scope: Scope) {
     recording = { action, scope };
     message = t('shortcuts.recordHint');
+    // WebKit on macOS does not focus a button on click; keep keyboard and screen reader
+    // behaviour the same everywhere.
+    (e.currentTarget as HTMLElement).focus();
   }
 
-  async function onKey(e: KeyboardEvent, action: ShortcutAction, scope: Scope) {
-    if (!recording || recording.action !== action || recording.scope !== scope) return;
+  /** Cancels recording on a pointer press elsewhere (blur never fires without focus on macOS). */
+  function onPointerDown(e: PointerEvent) {
+    if (!recording) return;
+    if (e.target instanceof Element && e.target.closest('[data-recording]')) return;
+    recording = null;
+    message = '';
+  }
+
+  /**
+   * Capture phase on window: recording works whether or not the button has focus, and the
+   * keys never reach the app-wide handler.
+   */
+  async function onKey(e: KeyboardEvent) {
+    if (!recording) return;
+    const { action, scope } = recording;
     e.preventDefault();
     e.stopPropagation();
     const bare = !e.ctrlKey && !e.altKey && !e.metaKey && !e.shiftKey;
@@ -42,22 +59,28 @@
     const binding = bindingFromEvent(e);
     if (!binding) return; // only modifiers so far
     if (scope === 'global' && !validGlobal(binding)) {
-      message = t('shortcuts.needsModifier');
+      message = t(mac ? 'shortcuts.needsModifierMac' : 'shortcuts.needsModifier');
       return;
     }
     recording = null;
     const other = await app.setShortcut(action, scope, binding);
     const notes: string[] = [];
     if (other) notes.push(t('shortcuts.moved', app.keysLabel(binding), t(`action.${other}`)));
-    if (scope === 'global' && mayCollideWithAltGr(binding)) notes.push(t('shortcuts.altGr'));
+    if (scope === 'global' && mayCollideWithAltGr(binding, mac))
+      notes.push(t(mac ? 'shortcuts.optionChars' : 'shortcuts.altGr'));
     if (scope === 'global' && app.globalFailures.includes(action)) notes.push(t('shortcuts.taken'));
     message = notes.join(' ');
   }
 </script>
 
+<svelte:window onkeydowncapture={onKey} onpointerdowncapture={onPointerDown} />
+
 <section aria-labelledby="shortcuts-title" class="shortcuts">
   <h2 id="shortcuts-title">{t('shortcuts.title')}</h2>
-  <p class="hint">{t('shortcuts.globalHint')} {t('shortcuts.mediaKeys')}</p>
+  <p class="hint">
+    {t(mac ? 'shortcuts.globalHintMac' : 'shortcuts.globalHint')}
+    {t('shortcuts.mediaKeys')}
+  </p>
 
   <table>
     <thead>
@@ -91,8 +114,7 @@
                     scopeName(scope),
                   )} ({active ? t('shortcuts.record') : keys || t('shortcuts.none')})"
                   aria-describedby={failed ? `taken-${action}` : undefined}
-                  onclick={() => start(action, scope)}
-                  onkeydown={(e) => onKey(e, action, scope)}
+                  onclick={(e) => start(e, action, scope)}
                   onblur={() => {
                     if (active) recording = null;
                   }}

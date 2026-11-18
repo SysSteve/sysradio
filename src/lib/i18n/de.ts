@@ -216,6 +216,8 @@ export const de = {
   'shortcuts.global': 'Systemweit',
   'shortcuts.globalHint':
     'Systemweite Kürzel funktionieren auch, wenn SysRadio im Hintergrund oder im Infobereich ist. Sie brauchen Strg, Alt oder die Windows-Taste.',
+  'shortcuts.globalHintMac':
+    'Systemweite Kürzel funktionieren auch, wenn SysRadio im Hintergrund oder in der Menüleiste ist. Sie brauchen ⌃ Control, ⌥ Option oder ⌘ Befehl.',
   'shortcuts.mediaKeys': 'Die Medientasten deiner Tastatur funktionieren immer.',
   'shortcuts.none': 'Keins',
   'shortcuts.record': 'Taste drücken …',
@@ -223,6 +225,9 @@ export const de = {
     'Drücke die neue Tastenkombination. Esc bricht ab, Entf entfernt das Kürzel.',
   'shortcuts.change': (action: string, scope: string) => `${action}, ${scope}: Kürzel ändern`,
   'shortcuts.needsModifier': 'Systemweite Kürzel brauchen Strg, Alt oder die Windows-Taste.',
+  'shortcuts.needsModifierMac': 'Systemweite Kürzel brauchen ⌃ Control, ⌥ Option oder ⌘ Befehl.',
+  'shortcuts.optionChars':
+    'Achtung: ⌥ Option erzeugt auf deiner Tastatur Zeichen wie @ oder €. Das Kürzel kann sie blockieren.',
   'shortcuts.altGr':
     'Achtung: Strg+Alt ist auf vielen Tastaturen AltGr. Das Kürzel kann Zeichen wie @ oder € blockieren.',
   'shortcuts.moved': (keys: string, other: string) =>

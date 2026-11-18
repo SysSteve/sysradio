@@ -101,6 +101,18 @@ describe('editing shortcuts', () => {
     expect(accelerator(b('p', 'KeyP', { ctrl: true, shift: true }))).toBe('Control+Shift+KeyP');
   });
 
+  it('flags AltGr (Windows) and Option (macOS) collisions per platform', () => {
+    const ctrlAlt = b('q', 'KeyQ', { ctrl: true, alt: true });
+    const option = b('l', 'KeyL', { alt: true });
+    expect(mayCollideWithAltGr(ctrlAlt)).toBe(true);
+    expect(mayCollideWithAltGr(ctrlAlt, false)).toBe(true);
+    expect(mayCollideWithAltGr(option)).toBe(false);
+    expect(mayCollideWithAltGr(option, true)).toBe(true);
+    expect(mayCollideWithAltGr(b('l', 'KeyL', { alt: true, meta: true }), true)).toBe(false);
+    expect(mayCollideWithAltGr(ctrlAlt, true)).toBe(false);
+    expect(mayCollideWithAltGr(b('l', 'KeyL', { meta: true }), true)).toBe(false);
+  });
+
   it('shows localised names', () => {
     const names = { ctrl: 'Strg', alt: 'Alt', shift: 'Umschalt', meta: 'Win', space: 'Leertaste' };
     expect(bindingParts(b(' ', 'Space'), names, false)).toEqual(['Leertaste']);

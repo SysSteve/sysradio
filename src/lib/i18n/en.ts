@@ -216,6 +216,8 @@ export const en: Messages = {
   'shortcuts.global': 'System-wide',
   'shortcuts.globalHint':
     'System-wide shortcuts also work while SysRadio is in the background or in the notification area. They need Ctrl, Alt or the Windows key.',
+  'shortcuts.globalHintMac':
+    'System-wide shortcuts also work while SysRadio is in the background or in the menu bar. They need ⌃ Control, ⌥ Option or ⌘ Command.',
   'shortcuts.mediaKeys': 'The media keys on your keyboard always work.',
   'shortcuts.none': 'None',
   'shortcuts.record': 'Press keys…',
@@ -223,6 +225,9 @@ export const en: Messages = {
     'Press the new key combination. Esc cancels, Delete removes the shortcut.',
   'shortcuts.change': (action, scope) => `${action}, ${scope}: change shortcut`,
   'shortcuts.needsModifier': 'System-wide shortcuts need Ctrl, Alt or the Windows key.',
+  'shortcuts.needsModifierMac': 'System-wide shortcuts need ⌃ Control, ⌥ Option or ⌘ Command.',
+  'shortcuts.optionChars':
+    'Note: ⌥ Option types characters such as @ or € on many keyboards. This shortcut may block them.',
   'shortcuts.altGr':
     'Note: on many keyboards Ctrl+Alt is AltGr. This shortcut may block characters such as @ or €.',
   'shortcuts.moved': (keys, other) => `${keys} was assigned to “${other}” and now works here.`,

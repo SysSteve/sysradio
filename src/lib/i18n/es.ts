@@ -218,6 +218,8 @@ export const es: Messages = {
   'shortcuts.global': 'En todo el sistema',
   'shortcuts.globalHint':
     'Los atajos de todo el sistema funcionan aunque SysRadio esté en segundo plano o en el área de notificación. Necesitan Ctrl, Alt o la tecla Windows.',
+  'shortcuts.globalHintMac':
+    'Los atajos de todo el sistema funcionan aunque SysRadio esté en segundo plano o en la barra de menús. Necesitan ⌃ Control, ⌥ Opción o ⌘ Comando.',
   'shortcuts.mediaKeys': 'Las teclas multimedia de tu teclado funcionan siempre.',
   'shortcuts.none': 'Ninguno',
   'shortcuts.record': 'Pulsa las teclas…',
@@ -226,6 +228,10 @@ export const es: Messages = {
   'shortcuts.change': (action, scope) => `${action}, ${scope}: cambiar atajo`,
   'shortcuts.needsModifier':
     'Los atajos de todo el sistema necesitan Ctrl, Alt o la tecla Windows.',
+  'shortcuts.needsModifierMac':
+    'Los atajos de todo el sistema necesitan ⌃ Control, ⌥ Opción o ⌘ Comando.',
+  'shortcuts.optionChars':
+    'Atención: ⌥ Opción escribe caracteres como @ o € en muchos teclados. Este atajo puede bloquearlos.',
   'shortcuts.altGr':
     'Atención: en muchos teclados Ctrl+Alt equivale a AltGr. Este atajo puede bloquear caracteres como @ o €.',
   'shortcuts.moved': (keys, other) => `${keys} estaba asignado a «${other}» y ahora funciona aquí.`,

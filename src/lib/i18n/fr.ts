@@ -221,6 +221,8 @@ export const fr: Messages = {
   'shortcuts.global': 'Dans tout le système',
   'shortcuts.globalHint':
     'Les raccourcis système fonctionnent même lorsque SysRadio est en arrière-plan ou dans la zone de notification. Ils nécessitent Ctrl, Alt ou la touche Windows.',
+  'shortcuts.globalHintMac':
+    'Les raccourcis système fonctionnent même lorsque SysRadio est en arrière-plan ou dans la barre des menus. Ils nécessitent ⌃ Contrôle, ⌥ Option ou ⌘ Commande.',
   'shortcuts.mediaKeys': 'Les touches multimédias de ton clavier fonctionnent toujours.',
   'shortcuts.none': 'Aucun',
   'shortcuts.record': 'Appuie sur les touches…',
@@ -228,6 +230,10 @@ export const fr: Messages = {
     'Appuie sur la nouvelle combinaison de touches. Échap annule, Suppr supprime le raccourci.',
   'shortcuts.change': (action, scope) => `${action}, ${scope} : modifier le raccourci`,
   'shortcuts.needsModifier': 'Les raccourcis système nécessitent Ctrl, Alt ou la touche Windows.',
+  'shortcuts.needsModifierMac':
+    'Les raccourcis système nécessitent ⌃ Contrôle, ⌥ Option ou ⌘ Commande.',
+  'shortcuts.optionChars':
+    'Attention : ⌥ Option permet de saisir des caractères comme @ ou € sur de nombreux claviers. Ce raccourci peut les bloquer.',
   'shortcuts.altGr':
     'Attention : sur de nombreux claviers, Ctrl+Alt correspond à AltGr. Ce raccourci peut bloquer des caractères comme @ ou €.',
   'shortcuts.moved': (keys, other) =>
